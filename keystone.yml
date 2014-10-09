@@ -1,0 +1,42 @@
+- hosts: openstack-stg
+  vars: 
+     keystonedbuser: keystone
+
+  tasks:
+    - name: A. Creating random password for Rabbit
+      command: openssl rand -hex 7
+      register: rmqpass
+
+    - name: B. Creating random password for keystone db user
+      command: openssl rand -hex 7
+      register: keystonedbpass
+
+    - name: 1. Install packages
+      action: apt pkg={{item}} state=installed
+      with_items: 
+        - rabbitmq-server
+        - keystone
+        - mysql-server
+        - python-mysqldb
+
+    - name: 2. Add name entry for resolution
+      lineinfile: dest=/etc/hosts regexp='^127\.0\.0\.1' line='127.0.0.1 localhost controller'
+
+    - name: 3. Change guest password
+      shell: rabbitmqctl change_password guest {{ rmqpass.stdout }}
+
+    - name: 4. Remove SQLite default db
+      shell: rm -f /var/lib/keystone/keystone.db
+
+    - name: 5. start services
+      service: name=rabbitmq-server state=running enabled=yes
+      service: name=mysql state=running enabled=yes
+
+    - name: 6. Create Keystone DB
+      mysql_db: name=keystone state=present
+
+    - name: 7. Create Keystone DB user/pass
+      mysql_user: name={{ keystonedbuser }} password={{ keystonedbpass.stdout }} priv=keystone.*:ALL state=present
+
+#    - name: 8. Configure Keystone
+
