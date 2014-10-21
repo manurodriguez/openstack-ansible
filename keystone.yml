@@ -1,9 +1,14 @@
 - hosts: openstack-stg
- - include: variables.yml 
+  remote_user: benutzer
+  sudo: yes
+
+  vars_files:
+  - variables.yml
 
 # Install the Identity Service
 
   tasks: 
+
     - name: Install packages
       apt: name=keystone state=latest
 
@@ -35,37 +40,69 @@
     - name: Initialize Keystone database
       shell: keystone-manage db_sync
 
-    - name: Start Keystone service
+    - name: Start Keystone service Keystone 
       service: name=keystone state=started enabled=yes
 
-    - name: Export Keystone "admin" credentials
-      command: export SERVICE_TOKEN=ADMIN ; export SERVICE_ENDPOINT=http://{{MY_PRIVATE_IP}}:35357/v2.0
-
     - name: Create Main tenant
-      command: keystone tenant-create --name {{TENANT_ID}}
+      command: keystone tenant-create --name {{TENANT_ID}} 
+      environment:
+        OS_SERVICE_ENDPOINT: http://127.0.0.1:35357/v2.0
+        OS_SERVICE_TOKEN: ADMIN
+#      keystone_user: tenant={{TENANT_ID}} tenant_description="Default Tenant"
 
     - name: Create Service tenant
-      command:  keystone tenant-create --name {{SERVICE_TENANT_ID}}
+      command: keystone tenant-create --name {{SERVICE_TENANT_ID}}
+      environment:
+        OS_SERVICE_ENDPOINT: http://127.0.0.1:35357/v2.0
+        OS_SERVICE_TOKEN: ADMIN
+#      keystone_user: tenant={{SERVICE_TENANT_ID}} tenant_description="Service Tenant"
 
-    - name: Create admin role
-      command:  keystone role-create --name {{ADMIN_ROLE_ID}}
+    - name: Create Admin role
+      command: keystone role-create --name {{ADMIN_ROLE_ID}} 
+      environment:
+        OS_SERVICE_ENDPOINT: http://127.0.0.1:35357/v2.0
+        OS_SERVICE_TOKEN: ADMIN
+#      keystone_user: role={{ADMIN_ROLE_ID}}
 
-    - name: Create non-admin user
-      command: keystone user-create --tenant {{TENANT_ID}} --name {{MEMBER_USER_ID}} --pass {{PASS_MEMBER_USER}}
-
-    - name: Create non-admin user
+    - name: Create Admin user
       command: keystone user-create --tenant {{TENANT_ID}} --name {{ADMIN_USER_ID}} --pass {{PASS_ADMIN_USER}}
+      environment:
+        OS_SERVICE_ENDPOINT: http://127.0.0.1:35357/v2.0
+        OS_SERVICE_TOKEN: ADMIN
+#      keystone_user: user={{ADMIN_USER_ID}} tenant={{TENANT_ID}} password={{PASS_ADMIN_USER}}
 
-    - name: Grant admin role
-      command: keystone user-role-add --user-id {{ADMIN_USER_ID}} --tenant {{TENANT_ID}} --role-id {{ADMIN_ROLE_ID}}
+    - name: Create Non-admin user
+      command: keystone user-create --tenant {{TENANT_ID}} --name {{MEMBER_USER_ID}} --pass {{PASS_MEMBER_USER}}
+      environment:
+        OS_SERVICE_ENDPOINT: http://127.0.0.1:35357/v2.0
+        OS_SERVICE_TOKEN: ADMIN
+#      keystone_user: user={{MEMBER_USER_ID}} tenant={{TENANT_ID}} password={{PASS_MEMBER_USER}}
+
+    - name: Grant Admin role
+      command: keystone user-role-add --user {{ADMIN_USER_ID}} --tenant {{TENANT_ID}} --role-id {{ADMIN_ROLE_ID}}
+      environment:
+        OS_SERVICE_ENDPOINT: http://127.0.0.1:35357/v2.0
+        OS_SERVICE_TOKEN: ADMIN
+#      keystone_user: role={{ADMIN_ROLE_ID}} user={{ADMIN_USER_ID}} tenant={{TENANT_ID}}
 
     - name: Populate service in service catalog
       command: keystone service-create --name=keystone --type=identity --description="Keystone Identity Service"
-
-    - name: Getting Keystone service
-      command: KEYSTONE_SVC_ID=`keystone service-get keystone | awk '/ id / { print $4 }'`
+      environment:
+        OS_SERVICE_ENDPOINT: http://127.0.0.1:35357/v2.0
+        OS_SERVICE_TOKEN: ADMIN
 
     - name: Populate endpoint in service catalog
-      command: keystone endpoint-create --region RegionOne --service-id=$KEYSTONE_SVC_ID --publicurl=http://{{MY_PUBLIC_IP}}:5000/v2.0 --internalurl=http://{{MY_PRIVATE_IP}}:5000/v2.0 --adminurl=http://{{MY_PRIVATE_IP}}:35357/v2.0
+      command: keystone endpoint-create --region RegionOne --service keystone --publicurl=http://{{MY_PUBLIC_IP}}:5000/v2.0 \
+               --internalurl=http://{{MY_PRIVATE_IP}}:5000/v2.0 --adminurl=http://{{MY_PRIVATE_IP}}:35357/v2.0 
+      environment:
+        OS_SERVICE_ENDPOINT: http://127.0.0.1:35357/v2.0
+        OS_SERVICE_TOKEN: ADMIN
 
+    - name: Create credentials directory
+      file: path=~/credentials owner=root state=directory mode=0755
 
+    - name: Create user credentials
+      copy: src=credentials/user dest=~/credentials/user owner=root group=root mode=0644
+
+    - name: Create admin credentials
+      copy: src=credentials/admin dest=~/credentials/admin owner=root group=root mode=0644
