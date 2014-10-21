@@ -1,0 +1,14 @@
+- hosts: openstack-stg
+  vars_files: 
+  - variables.yml
+
+  tasks:
+#  - include_vars: variables.yml
+#  - name: Getting a date
+#    shell: KEYSTONE_DATE=`date`
+
+#  - name: Saving date
+#    command: echo $KEYSTONE_DATE > /tmp/mydate
+
+  - name: Printing value
+    shell: echo {{KEYSTONE_DBPASS}} > /tmp/keystonepass

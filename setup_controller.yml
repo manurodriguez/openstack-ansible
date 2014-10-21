@@ -1,12 +1,5 @@
-- hosts: openstack-stg
-  remote_user: benutzer
-  sudo: yes
-  vars: 
-    # created with "openssl rand -hex 7"
-    rmqpass: 9dcfc0862cf55a
 
-  tasks:
-    - name: 1. Install packages
+    - name: Install packages
       action: apt pkg={{item}} state=installed
       with_items: 
         - rabbitmq-server
@@ -14,15 +7,15 @@
         - mysql-server
         - python-mysqldb
 
-    - name: 2. Add name entry for resolution
+    - name: Add name entry for resolution
       lineinfile: dest=/etc/hosts regexp='^127\.0\.0\.1' line='127.0.0.1 localhost controller'
 
-    - name: 3. Change guest password
-      shell: rabbitmqctl change_password guest {{ rmqpass }}
+    - name: Change guest password
+      shell: rabbitmqctl change_password guest {{ RABBIT_PASS }}
 
-    - name: 4. Remove SQLite default db
+    - name: Remove SQLite default db
       shell: rm -f /var/lib/keystone/keystone.db
 
-    - name: 5. start services
+    - name: start services
       service: name=rabbitmq-server state=running enabled=yes
       service: name=mysql state=running enabled=yes

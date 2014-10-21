@@ -1,0 +1,13 @@
+     RABBIT_PASS: notrabbitmq
+     MYSQL_ROOTPASS: notmysql
+     MY_PRIVATE_IP: 127.0.0.1
+     MY_PUBLIC_IP: 104.130.157.73
+     KEYSTONE_DBUSER: keystone
+     KEYSTONE_DBPASS: notkeystone
+     TENANT_ID: MyProject
+     SERVICE_TENANT_ID: Services
+     MEMBER_USER_ID: myuser
+     PASS_MEMBER_USER: mypassword
+     ADMIN_USER_ID: myadmin
+     PASS_ADMIN_USER: mypassword
+     ADMIN_ROLE_ID: admin

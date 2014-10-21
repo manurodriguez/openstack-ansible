@@ -1,42 +1,71 @@
 - hosts: openstack-stg
-  vars: 
-     keystonedbuser: keystone
+ - include: variables.yml 
 
-  tasks:
-    - name: A. Creating random password for Rabbit
-      command: openssl rand -hex 7
-      register: rmqpass
+# Install the Identity Service
 
-    - name: B. Creating random password for keystone db user
-      command: openssl rand -hex 7
-      register: keystonedbpass
+  tasks: 
+    - name: Install packages
+      apt: name=keystone state=latest
 
-    - name: 1. Install packages
-      action: apt pkg={{item}} state=installed
-      with_items: 
-        - rabbitmq-server
-        - keystone
-        - mysql-server
-        - python-mysqldb
+    - name: Stop Keystone service
+      service: name=keystone state=stopped enabled=yes
 
-    - name: 2. Add name entry for resolution
-      lineinfile: dest=/etc/hosts regexp='^127\.0\.0\.1' line='127.0.0.1 localhost controller'
-
-    - name: 3. Change guest password
-      shell: rabbitmqctl change_password guest {{ rmqpass.stdout }}
-
-    - name: 4. Remove SQLite default db
+    - name: Remove SQLite default db
       shell: rm -f /var/lib/keystone/keystone.db
-
-    - name: 5. start services
-      service: name=rabbitmq-server state=running enabled=yes
-      service: name=mysql state=running enabled=yes
-
-    - name: 6. Create Keystone DB
+    
+    - name: Create Keystone DB
       mysql_db: name=keystone state=present
 
-    - name: 7. Create Keystone DB user/pass
-      mysql_user: name={{ keystonedbuser }} password={{ keystonedbpass.stdout }} priv=keystone.*:ALL state=present
+    - name: Create Keystone DB user/pass
+      mysql_user: name={{ KEYSTONE_DBUSER }} password={{ KEYSTONE_DBPASS }} priv=keystone.*:ALL state=present
 
-#    - name: 8. Configure Keystone
+# 
+    - name: Configure Keystone DB access
+      lineinfile: "dest=/etc/keystone/keystone.conf regexp='^connection'
+                   line='connection = mysql://{{KEYSTONE_DBUSER}}:{{KEYSTONE_DBPASS}}@controller/keystone'"
+
+    - name: Set keystone public endpoint URL
+      lineinfile: "dest=/etc/keystone/keystone.conf regexp='^public_endpoint' 
+                   line='public_endpoint=http://{{MY_PUBLIC_IP}}:%(public_port)'"
+
+    - name: Set keystone admin endpoint URL
+      lineinfile: "dest=/etc/keystone/keystone.conf regexp='^public_endpoint' 
+                   line='public_endpoint=http://{{MY_PRIVATE_IP}}:%(admin_port)'"
+
+    - name: Initialize Keystone database
+      shell: keystone-manage db_sync
+
+    - name: Start Keystone service
+      service: name=keystone state=started enabled=yes
+
+    - name: Export Keystone "admin" credentials
+      command: export SERVICE_TOKEN=ADMIN ; export SERVICE_ENDPOINT=http://{{MY_PRIVATE_IP}}:35357/v2.0
+
+    - name: Create Main tenant
+      command: keystone tenant-create --name {{TENANT_ID}}
+
+    - name: Create Service tenant
+      command:  keystone tenant-create --name {{SERVICE_TENANT_ID}}
+
+    - name: Create admin role
+      command:  keystone role-create --name {{ADMIN_ROLE_ID}}
+
+    - name: Create non-admin user
+      command: keystone user-create --tenant {{TENANT_ID}} --name {{MEMBER_USER_ID}} --pass {{PASS_MEMBER_USER}}
+
+    - name: Create non-admin user
+      command: keystone user-create --tenant {{TENANT_ID}} --name {{ADMIN_USER_ID}} --pass {{PASS_ADMIN_USER}}
+
+    - name: Grant admin role
+      command: keystone user-role-add --user-id {{ADMIN_USER_ID}} --tenant {{TENANT_ID}} --role-id {{ADMIN_ROLE_ID}}
+
+    - name: Populate service in service catalog
+      command: keystone service-create --name=keystone --type=identity --description="Keystone Identity Service"
+
+    - name: Getting Keystone service
+      command: KEYSTONE_SVC_ID=`keystone service-get keystone | awk '/ id / { print $4 }'`
+
+    - name: Populate endpoint in service catalog
+      command: keystone endpoint-create --region RegionOne --service-id=$KEYSTONE_SVC_ID --publicurl=http://{{MY_PUBLIC_IP}}:5000/v2.0 --internalurl=http://{{MY_PRIVATE_IP}}:5000/v2.0 --adminurl=http://{{MY_PRIVATE_IP}}:35357/v2.0
+
 
