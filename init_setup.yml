@@ -28,6 +28,9 @@
     - name: Add name entry for resolution
       lineinfile: dest=/etc/hosts regexp='^127\.0\.0\.1' line='127.0.0.1 localhost controller'
 
+    - name: Remove old menu.lst
+      command: rm -f /boot/grub/menu.lst
+
     - name: Restart server
       command: shutdown -r now "Ansible updates triggered"
       async: 0
