@@ -34,56 +34,50 @@
                    line='public_endpoint=http://{{MY_PUBLIC_IP}}:%(public_port)'"
 
     - name: Set keystone admin endpoint URL
-      lineinfile: "dest=/etc/keystone/keystone.conf regexp='^public_endpoint' 
-                   line='public_endpoint=http://{{MY_PRIVATE_IP}}:%(admin_port)'"
+      lineinfile: "dest=/etc/keystone/keystone.conf regexp='^admin_endpoint' 
+                   line='admin_endpoint=http://{{MY_PRIVATE_IP}}:%(admin_port)'"
 
     - name: Initialize Keystone database
       shell: keystone-manage db_sync
 
-    - name: Start Keystone service Keystone 
+    - name: Start Keystone service
       service: name=keystone state=started enabled=yes
 
     - name: Create Main tenant
-      command: keystone tenant-create --name {{TENANT_ID}} 
+      command: keystone tenant-create --name {{TENANT_NAME}} 
       environment:
         OS_SERVICE_ENDPOINT: http://127.0.0.1:35357/v2.0
         OS_SERVICE_TOKEN: ADMIN
-#      keystone_user: tenant={{TENANT_ID}} tenant_description="Default Tenant"
 
     - name: Create Service tenant
-      command: keystone tenant-create --name {{SERVICE_TENANT_ID}}
+      command: keystone tenant-create --name {{SERVICE_TENANT_NAME}}
       environment:
         OS_SERVICE_ENDPOINT: http://127.0.0.1:35357/v2.0
         OS_SERVICE_TOKEN: ADMIN
-#      keystone_user: tenant={{SERVICE_TENANT_ID}} tenant_description="Service Tenant"
 
     - name: Create Admin role
-      command: keystone role-create --name {{ADMIN_ROLE_ID}} 
+      command: keystone role-create --name {{ADMIN_ROLE_NAME}} 
       environment:
         OS_SERVICE_ENDPOINT: http://127.0.0.1:35357/v2.0
         OS_SERVICE_TOKEN: ADMIN
-#      keystone_user: role={{ADMIN_ROLE_ID}}
 
     - name: Create Admin user
-      command: keystone user-create --tenant {{TENANT_ID}} --name {{ADMIN_USER_ID}} --pass {{PASS_ADMIN_USER}}
+      command: keystone user-create --tenant {{TENANT_NAME}} --name {{ADMIN_USER}} --pass {{ADMIN_PASS}}
       environment:
         OS_SERVICE_ENDPOINT: http://127.0.0.1:35357/v2.0
         OS_SERVICE_TOKEN: ADMIN
-#      keystone_user: user={{ADMIN_USER_ID}} tenant={{TENANT_ID}} password={{PASS_ADMIN_USER}}
 
     - name: Create Non-admin user
-      command: keystone user-create --tenant {{TENANT_ID}} --name {{MEMBER_USER_ID}} --pass {{PASS_MEMBER_USER}}
+      command: keystone user-create --tenant {{TENANT_NAME}} --name {{MEMBER_USER}} --pass {{MEMBER_PASS}}
       environment:
         OS_SERVICE_ENDPOINT: http://127.0.0.1:35357/v2.0
         OS_SERVICE_TOKEN: ADMIN
-#      keystone_user: user={{MEMBER_USER_ID}} tenant={{TENANT_ID}} password={{PASS_MEMBER_USER}}
 
     - name: Grant Admin role
-      command: keystone user-role-add --user {{ADMIN_USER_ID}} --tenant {{TENANT_ID}} --role-id {{ADMIN_ROLE_ID}}
+      command: keystone user-role-add --user {{ADMIN_USER}} --tenant {{TENANT_NAME}} --role-id {{ADMIN_ROLE_NAME}}
       environment:
         OS_SERVICE_ENDPOINT: http://127.0.0.1:35357/v2.0
         OS_SERVICE_TOKEN: ADMIN
-#      keystone_user: role={{ADMIN_ROLE_ID}} user={{ADMIN_USER_ID}} tenant={{TENANT_ID}}
 
     - name: Populate service in service catalog
       command: keystone service-create --name=keystone --type=identity --description="Keystone Identity Service"

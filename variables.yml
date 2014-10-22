@@ -4,10 +4,14 @@
      MY_PUBLIC_IP: "{{ inventory_hostname }}"
      KEYSTONE_DBUSER: keystone
      KEYSTONE_DBPASS: notkeystone
-     TENANT_ID: MyProject
-     SERVICE_TENANT_ID: Services
-     MEMBER_USER_ID: myuser
-     PASS_MEMBER_USER: mypassword
-     ADMIN_USER_ID: myadmin
-     PASS_ADMIN_USER: mypassword
-     ADMIN_ROLE_ID: admin
+     TENANT_NAME: MyProject
+     SERVICE_TENANT_NAME: Services
+     MEMBER_USER: myuser
+     MEMBER_PASS: mypassword
+     ADMIN_USER: myadmin
+     ADMIN_PASS: mypassword
+     ADMIN_ROLE_NAME: admin
+     GLANCE_DBUSER: glance
+     GLANCE_DBPASS: notglance
+     GLANCE_USER: kglance
+     GLANCE_PASS: knotglance
