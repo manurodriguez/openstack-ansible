@@ -1,6 +1,4 @@
 - hosts: openstack-stg
-  remote_user: benutzer
-  sudo: yes
 
   vars_files:
   - variables.yml
@@ -25,32 +23,28 @@
       mysql_db: name=glance state=present
 
     - name: Create Glance DB user/pass
-      mysql_user: name={{ GLANCE_DBUSER }} password={{ GLANCE_DBPASS }} priv=glance.*:ALL state=present
+      mysql_user: name={{GLANCE_DBUSER}} password={{GLANCE_DBPASS}} priv=glance.*:ALL state=present
 
     - name: Create Glance Service user
-      command: keystone user-create --tenant {{TENANT_NAME}} --name {{GLANCE_USER}} --pass {{GLANCE_PASS}}
-      environment:
-        OS_SERVICE_ENDPOINT: http://127.0.0.1:35357/v2.0
-        OS_SERVICE_TOKEN: ADMIN
+      command: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} \
+               --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} user-create --tenant {{SERVICE_TENANT_NAME}} \
+               --name {{GLANCE_USER}} --pass {{GLANCE_PASS}}
 
     - name: Grant Admin role to Glance user
-      command: keystone user-role-add --user {{GLANCE_USER}} --tenant {{TENANT_NAME}} --role-id {{ADMIN_ROLE_NAME}}
-      environment:
-        OS_SERVICE_ENDPOINT: http://127.0.0.1:35357/v2.0
-        OS_SERVICE_TOKEN: ADMIN
+      command: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} \
+               --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} user-role-add --user {{GLANCE_USER}} \
+               --tenant {{SERVICE_TENANT_NAME}} --role-id {{ADMIN_ROLE_NAME}}
 
     - name: Populate Glance service in service catalog
-      command: keystone service-create --name=glance --type=image --description="Glance Image Service"
-      environment:
-        OS_SERVICE_ENDPOINT: http://127.0.0.1:35357/v2.0
-        OS_SERVICE_TOKEN: ADMIN
+      command: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} \
+               --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} service-create --name=glance --type=image \
+               --description="Glance Image Service"
 
     - name: Populate Glance endpoint in service catalog
-      command: keystone endpoint-create --region RegionOne --service glance --publicurl=http://{{MY_PUBLIC_IP}}:9292/v1 \
+      command: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} \
+               --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} endpoint-create --region RegionOne \
+               --service glance --publicurl=http://{{MY_PUBLIC_IP}}:9292/v1 \
                --internalurl=http://{{MY_PRIVATE_IP}}:9292/v1 --adminurl=http://{{MY_PRIVATE_IP}}:9292/v1
-      environment:
-        OS_SERVICE_ENDPOINT: http://127.0.0.1:35357/v2.0
-        OS_SERVICE_TOKEN: ADMIN
 
     - name: Configure Glance DB access (registry)
       lineinfile: "dest=/etc/glance/glance-registry.conf regexp='^#connection'
@@ -108,8 +102,9 @@
       lineinfile: "dest=/etc/glance/glance-api.conf regexp='^rabbit_host'
                    line='rabbit_host = {{MY_PRIVATE_IP}}'"
 
-#    - name: Alter table with utf8
-#      command: mysql -D glance -e "alter table migrate_version convert to character set utf8 collate utf8_unicode_ci;"
+    - name: Set rabbit password on api config
+      lineinfile: "dest=/etc/glance/glance-api.conf regexp='^rabbit_password'
+                   line='rabbit_password = {{RABBIT_PASS}}'"
 
     - name: Initialize Glance database
       command: glance-manage db_sync
@@ -120,10 +115,13 @@
     - name: Start Glance-api service
       service: name=glance-api state=started enabled=yes
 
-    - name: Create Images directory
-      file: path=~/Images owner=root state=directory mode=0755
+    - name: Create images directory
+      file: path=~/images owner=root state=directory mode=0755
 
     - name: Download Test Image
-      command: wget http://cdn.download.cirros-cloud.net/0.3.2/cirros-0.3.2-x86_64-disk.img -O ~/Images/cirros-0.3.2-x86_64-disk.qcow2
+      command: wget http://cdn.download.cirros-cloud.net/0.3.2/cirros-0.3.2-x86_64-disk.img -O ~/images/cirros-0.3.2-x86_64-disk.qcow2
 
-
+    - name: Register a qcow2 image
+      command: glance --os-tenant-name {{TENANT_NAME}} --os-username {{MEMBER_USER}} --os-password {{MEMBER_PASS}} \
+               --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} image-create --name "cirros-qcow2" \
+               --disk-format qcow2 --container-format bare --is-public True --file ~/images/cirros-0.3.2-x86_64-disk.qcow2

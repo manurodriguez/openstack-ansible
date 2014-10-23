@@ -1,6 +1,4 @@
 - hosts: openstack-stg
-  remote_user: benutzer
-  sudo: yes
 
   vars_files:
   - variables.yml

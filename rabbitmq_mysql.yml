@@ -1,3 +1,10 @@
+- hosts: openstack-stg
+
+  vars_files:
+  - variables.yml
+
+   tasks:
+
     - name: Installing RabbitMQ and MySQL
       action: apt pkg={{item}} state=installed
       with_items: 

@@ -1,3 +1,9 @@
+- hosts: openstack-stg
+
+  vars_files:
+  - variables.yml
+
+  tasks:
     - name: Updating package list
       apt: update_cache=yes
 
