@@ -1,10 +1,12 @@
      RABBIT_PASS: notrabbitmq
      MYSQL_ROOTPASS: notmysql
      MY_PRIVATE_IP: 127.0.0.1
-     MY_PUBLIC_IP: "{{ inventory_hostname }}"
+     MY_PUBLIC_IP: 127.0.0.1
+     AUTH_URL: http://127.0.0.1:5000/v2.0/
      KEYSTONE_DBUSER: keystone
      KEYSTONE_DBPASS: notkeystone
      TENANT_NAME: MyProject
+     REGION_NAME: RegionOne
      SERVICE_TENANT_NAME: Services
      MEMBER_USER: myuser
      MEMBER_PASS: mypassword
@@ -13,5 +15,5 @@
      ADMIN_ROLE_NAME: admin
      GLANCE_DBUSER: glance
      GLANCE_DBPASS: notglance
-     GLANCE_USER: kglance
-     GLANCE_PASS: knotglance
+     GLANCE_USER: glance
+     GLANCE_PASS: notglance

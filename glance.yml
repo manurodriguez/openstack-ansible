@@ -108,8 +108,8 @@
       lineinfile: "dest=/etc/glance/glance-api.conf regexp='^rabbit_host'
                    line='rabbit_host = {{MY_PRIVATE_IP}}'"
 
-    - name: Alter table with utf8
-      command: mysql -D glance -e "alter table migrate_version convert to character set utf8 collate utf8_unicode_ci;"
+#    - name: Alter table with utf8
+#      command: mysql -D glance -e "alter table migrate_version convert to character set utf8 collate utf8_unicode_ci;"
 
     - name: Initialize Glance database
       command: glance-manage db_sync
@@ -119,4 +119,11 @@
 
     - name: Start Glance-api service
       service: name=glance-api state=started enabled=yes
+
+    - name: Create Images directory
+      file: path=~/Images owner=root state=directory mode=0755
+
+    - name: Download Test Image
+      command: wget http://cdn.download.cirros-cloud.net/0.3.2/cirros-0.3.2-x86_64-disk.img -O ~/Images/cirros-0.3.2-x86_64-disk.qcow2
+
 

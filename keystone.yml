@@ -27,15 +27,19 @@
 # 
     - name: Configure Keystone DB access
       lineinfile: "dest=/etc/keystone/keystone.conf regexp='^connection'
-                   line='connection = mysql://{{KEYSTONE_DBUSER}}:{{KEYSTONE_DBPASS}}@controller/keystone'"
+                   line='connection = mysql://{{KEYSTONE_DBUSER}}:{{KEYSTONE_DBPASS}}@{{MY_PRIVATE_IP}}/keystone'"
 
     - name: Set keystone public endpoint URL
-      lineinfile: "dest=/etc/keystone/keystone.conf regexp='^public_endpoint' 
-                   line='public_endpoint=http://{{MY_PUBLIC_IP}}:%(public_port)'"
+      lineinfile: "dest=/etc/keystone/keystone.conf regexp='^#public_endpoint' 
+                   line='public_endpoint=http://{{MY_PUBLIC_IP}}:%(public_port)s/'"
 
     - name: Set keystone admin endpoint URL
-      lineinfile: "dest=/etc/keystone/keystone.conf regexp='^admin_endpoint' 
-                   line='admin_endpoint=http://{{MY_PRIVATE_IP}}:%(admin_port)'"
+      lineinfile: "dest=/etc/keystone/keystone.conf regexp='^#admin_endpoint' 
+                   line='admin_endpoint=http://{{MY_PRIVATE_IP}}:%(admin_port)s/'"
+
+    - name: Set rabbit pass on keystone config
+      lineinfile: "dest=/etc/keystone/keystone.conf regexp='^#rabbit_password'
+                   line='rabbit_password = {{RABBIT_PASS}}'"
 
     - name: Initialize Keystone database
       shell: keystone-manage db_sync

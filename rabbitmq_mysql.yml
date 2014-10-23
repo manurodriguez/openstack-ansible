@@ -20,13 +20,13 @@
       lineinfile: dest=/etc/rabbitmq/rabbitmq.conf.d/rabbitmq-listen.conf line='RABBITMQ_NODE_IP_ADDRESS={{MY_PRIVATE_IP}}'
 
     - name: Configure MySQL character set
-      lineinfile: dest=/etc/mysql/my.cnf line='character-set-server = utf8'
+      lineinfile: dest=/etc/mysql/my.cnf insertbefore="^\[mysqldump\]" line='character-set-server = utf8'
     
     - name: Configure MySQL Collation
-      lineinfile: dest=/etc/mysql/my.cnf line='collation-server = utf8_general_ci'
+      lineinfile: dest=/etc/mysql/my.cnf insertbefore="^\[mysqldump\]" line='collation-server = utf8_general_ci'
 
     - name: Configure utf8 for connections
-      lineinfile: dest=/etc/mysql/my.cnf line="init-connect='SET NAMES utf8'" 
+      lineinfile: dest=/etc/mysql/my.cnf insertbefore="^\[mysqldump\]" line="init-connect='SET NAMES utf8'" 
 
     - name: Start MySQL
       service: name=mysql state=started enabled=yes
