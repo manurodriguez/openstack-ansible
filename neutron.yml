@@ -1,0 +1,266 @@
+- hosts: openstack-man
+
+  vars_files:
+  - variables.yml
+
+# Installing the Neutron Service
+
+  tasks: 
+
+    - name: Install packages
+      action: apt pkg={{item}} state=installed
+      with_items:
+        - openvswitch-switch
+        - neutron-server 
+        - neutron-plugin-ml2 
+        - neutron-plugin-openvswitch-agent
+        - neutron-dhcp-agent
+        - neutron-l3-agent
+        - neutron-metadata-agent
+
+    - name: Restart Open vSwitch service
+      service: name=openvswitch-switch state=restarted enabled=yes
+
+    - name: Stop Neutron services
+      service: name={{item}} state=stopped enabled=yes
+      with_items:
+        - neutron-plugin-openvswitch-agent
+        - neutron-dhcp-agent
+        - neutron-l3-agent
+        - neutron-metadata-agent
+        - neutron-server
+
+    - name: Remove SQLite default db
+      shell: rm -f /var/lib/neutron/neutron.sqlite
+    
+    - name: Create Neutron DB
+      mysql_db: name=neutron state=present
+
+    - name: Create Neutron DB user/pass
+      mysql_user: name={{NEUTRON_DBUSER}} password={{NEUTRON_DBPASS}} priv=neutron.*:ALL state=present
+
+    - name: Create Neutron Service user
+      command: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} \
+               --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} user-create --tenant {{SERVICE_TENANT_NAME}} \
+               --name {{NEUTRON_USER}} --pass {{NEUTRON_PASS}}
+
+    - name: Grant Admin role to Neutron user
+      command: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} \
+               --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} user-role-add --user {{NEUTRON_USER}} \
+               --tenant {{SERVICE_TENANT_NAME}} --role-id {{ADMIN_ROLE_NAME}}
+
+    - name: Populate Neutron service in service catalog
+      command: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} \
+               --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} service-create --name=neutron --type=network \
+               --description="Neutron Network Service"
+
+    - name: Populate Neutron endpoint in service catalog
+      command: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} \
+               --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} endpoint-create --region RegionOne \
+               --service neutron --publicurl=http://{{MY_PUBLIC_IP}}:9696 \
+               --internalurl=http://{{MY_PRIVATE_IP}}:9696 --adminurl=http://{{MY_PRIVATE_IP}}:9696
+
+    - name: Configure Neutron DB access 
+      lineinfile: "dest=/etc/neutron/neutron.conf regexp='^connection = sqlite'
+                   line='connection = mysql://{{NEUTRON_DBUSER}}:{{NEUTRON_DBPASS}}@{{MY_PRIVATE_IP}}/neutron'"
+
+    - name: Set Neutron rabbit host
+      lineinfile: "dest=/etc/neutron/neutron.conf regexp='^# rabbit_host'
+                   line='rabbit_host = {{MY_PRIVATE_IP}}'"
+
+    - name: Set Neutron rabbit password
+      lineinfile: "dest=/etc/neutron/neutron.conf regexp='^# rabbit_password'
+                   line='rabbit_password = {{RABBIT_PASS}}'"
+
+    - name: Set auth host
+      lineinfile: "dest=/etc/neutron/neutron.conf regexp='^auth_host'
+                   line='auth_host = {{MY_PRIVATE_IP}}'"
+
+    - name: Set auth strategy
+      lineinfile: "dest=/etc/neutron/neutron.conf regexp='^# auth_strategy' 
+                   line=' auth_strategy = keystone'"
+
+    - name: Set admin tenant name 
+      lineinfile: "dest=/etc/neutron/neutron.conf regexp='^admin_tenant_name'
+                   line='admin_tenant_name = {{SERVICE_TENANT_NAME}}'"
+
+    - name: Set Neutron user 
+      lineinfile: "dest=/etc/neutron/neutron.conf regexp='^admin_user' 
+                   line='admin_user = {{NEUTRON_USER}}'"
+
+    - name: Set Neutron password
+      lineinfile: "dest=/etc/neutron/neutron.conf regexp='^admin_password' 
+                   line='admin_password = {{NEUTRON_PASS}}'"
+
+    - name: Enable IP Overlapping
+      lineinfile: "dest=/etc/neutron/neutron.conf regexp='^# allow_overlapping_ips = False'
+                   line=' allow_overlapping_ips = True'"
+
+    - name: Set ml2 plugin
+      lineinfile: "dest=/etc/neutron/neutron.conf regexp='^core_plugin' 
+                   line='core_plugin = ml2'"
+
+    - name: Set router service pluglin
+      lineinfile: "dest=/etc/neutron/neutron.conf regexp='^# service_plugins'
+                   line=' service_plugins = router'"
+
+    - name: Enable port status changes
+      lineinfile: "dest=/etc/neutron/neutron.conf regexp='^# notify_nova_on_port_status_changes'
+                   line=' notify_nova_on_port_status_changes = True'"
+
+    - name: Enable port data changes
+      lineinfile: "dest=/etc/neutron/neutron.conf regexp='^# notify_nova_on_port_data_changes' 
+                   line=' notify_nova_on_port_data_changes = True'"
+
+    - name: Set Nova URL
+      lineinfile: "dest=/etc/neutron/neutron.conf regexp='^# nova_url' 
+                   line=' nova_url = http://{{MY_PRIVATE_IP}}:8774/v2'"
+
+    - name: Set Nova admin user
+      lineinfile: "dest=/etc/neutron/neutron.conf regexp='^# nova_admin_username' 
+                   line=' nova_admin_username = {{NOVA_USER}}'"
+
+    - name: Set Nova admin password
+      lineinfile: "dest=/etc/neutron/neutron.conf regexp='^# nova_admin_password' 
+                   line=' nova_admin_password = {{NOVA_PASS}}'"
+
+    - name: Get Nova admin tenant ID
+      command: keystone tenant-get Services | awk '/ id / { print $4 }'
+      register: tenantID
+
+# SERVICE_TENANT_ID=`keystone tenant-get Services | awk '/ id / { print $4 }'`
+    - name: Set Nova admin tenant ID on the config
+      lineinfile: "dest=/etc/neutron/neutron.conf regexp='^# nova_admin_tenant_id' 
+                   line=' nova_admin_tenant_id = {{tenantID.stdout}}'"
+
+    - name: Set Nova admin auth URL
+      lineinfile: "dest=/etc/neutron/neutron.conf regexp='^# nova_admin_auth_url' 
+                   line=' nova_admin_auth_url = http://{{MY_PRIVATE_IP}}:35357/v2.0'"
+
+    - name: ML2 Set driver types
+      lineinfile: "dest=/etc/neutron/plugins/ml2/ml2_conf.ini regexp='^# type_drivers'
+                   line=' type_drivers = gre'"
+
+    - name: ML2 Set network types
+      lineinfile: "dest=/etc/neutron/plugins/ml2/ml2_conf.ini regexp='^# tenant_network_types'
+                   line=' tenant_network_types = gre'"
+
+    - name: ML2 Set driver mechanisms
+      lineinfile: "dest=/etc/neutron/plugins/ml2/ml2_conf.ini regexp='^# mechanism_drivers'
+                   line=' mechanism_drivers = openvswitch'"
+
+    - name: ML2 Set tunnel range id
+      lineinfile: "dest=/etc/neutron/plugins/ml2/ml2_conf.ini regexp='^# tunnel_id_ranges'
+                   line=' tunnel_id_ranges = 1:1000'"
+
+    - name: ML2 Set firewall driver
+      lineinfile: dest=/etc/neutron/plugins/ml2/ml2_conf.ini insertafter='^\[securitygroup\]'
+                  line=' firewall_driver = neutron.agent.linux.iptables_firewall.OVSHybridIptablesFirewallDriver'
+
+    - name: ML2 Enable security group
+      lineinfile: "dest=/etc/neutron/plugins/ml2/ml2_conf.ini regexp='^# enable_security_group'
+                   line=' enable_security_group = True'"
+
+    - name: ML2 Add ovs section
+      lineinfile: dest=/etc/neutron/plugins/ml2/ml2_conf.ini
+                  line='[ovs]'
+
+    - name: ML2 Set ovs local IP
+      lineinfile: dest=/etc/neutron/plugins/ml2/ml2_conf.ini insertafter='^\[ovs\]'
+                  line='local_ip = {{MY_PRIVATE_IP}}'
+
+    - name: ML2 Set ovs local IP
+      lineinfile: dest=/etc/neutron/plugins/ml2/ml2_conf.ini insertafter='^\[ovs\]'
+                  line='tunnel_type = gre'
+
+    - name: ML2 Set ovs local IP
+      lineinfile: dest=/etc/neutron/plugins/ml2/ml2_conf.ini insertafter='^\[ovs\]'
+                  line='tunnel_type = gre'
+
+    - name: Set DHCP Interface agent
+      lineinfile: dest=/etc/neutron/dhcp_agent.ini regexp='^# interface_driver = neutron.agent.linux.interface.OVSInterfaceDriver'
+                  line=' interface_driver = neutron.agent.linux.interface.OVSInterfaceDriver'
+
+    - name: Set DHCP driver
+      lineinfile: dest=/etc/neutron/dhcp_agent.ini regexp='^# dhcp_driver = neutron.agent.linux.dhcp.Dnsmasq'
+                  line=' dhcp_driver = neutron.agent.linux.dhcp.Dnsmasq'
+
+    - name: DHCP enable use spaces
+      lineinfile: dest=/etc/neutron/dhcp_agent.ini regexp='^# use_namespaces = True'
+                  line=' use_namespaces = True'
+
+    - name: DHCP enable isolated metadata
+      lineinfile: dest=/etc/neutron/dhcp_agent.ini regexp='^# enable_isolated_metadata'
+                  line=' enable_isolated_metadata = True'
+
+    - name: DHCP enable metadata network
+      lineinfile: dest=/etc/neutron/dhcp_agent.ini regexp='^# enable_metadata_network'
+                  line=' enable_metadata_network = True'
+
+    - name: Set L3 Interface agent
+      lineinfile: dest=/etc/neutron/l3_agent.ini regexp='^# interface_driver = neutron.agent.linux.interface.OVSInterfaceDriver'
+                  line=' interface_driver = neutron.agent.linux.interface.OVSInterfaceDriver'
+
+    - name: Enable L3 use namespaces
+      lineinfile: dest=/etc/neutron/l3_agent.ini regexp='^# use_namespaces'
+                  line=' use_namespaces = True'
+
+    - name: Set Metadata agent nova IP
+      lineinfile: dest=/etc/neutron/metadata_agent.ini regexp='^# nova_metadata_ip'
+                  line=' nova_metadata_ip = {{MY_PRIVATE_IP}}'
+
+    - name: Set Metadata agent nova port 
+      lineinfile: dest=/etc/neutron/metadata_agent.ini regexp='^# nova_metadata_port'
+                  line=' nova_metadata_port = 8775'
+
+    - name: Set Metadata agent proxy shared secret
+      lineinfile: dest=/etc/neutron/metadata_agent.ini regexp='^# metadata_proxy_shared_secret'
+                  line=' metadata_proxy_shared_secret = openstack'
+
+    - name: Set Metadata agent auth URL
+      lineinfile: "dest=/etc/neutron/metadata_agent.ini regexp='^# auth_url'
+                  line=' auth_url = http://{{MY_PRIVATE_IP}}:5000/v2.0'"
+
+    - name: Metadata admin tenanat name
+      lineinfile: dest=/etc/neutron/metadata_agent.ini regexp='^admin_tenant_name'
+                  line='admin_tenant_name = {{SERVICE_TENANT_NAME}}'
+
+    - name: Metadata admin user
+      lineinfile: dest=/etc/neutron/metadata_agent.ini regexp='^admin_user'
+                  line='admin_user = {{NEUTRON_USER}}'
+
+    - name: Metadata admin password
+      lineinfile: dest=/etc/neutron/metadata_agent.ini regexp='^admin_password'
+                  line='admin_password = {{NEUTRON_PASS}}'
+
+# Internal bridge created by default during the installation
+#    - name: Create Open vSwitch integration bridge
+#      command: ovs-vsctl add-br br-int
+
+    - name: Create Open vSwitch external bridge
+      command: ovs-vsctl add-br br-ex
+
+    - name: Start Neutron service
+      service: name=neutron-server state=started
+
+    - name: Wait for neutron-server to automatically run DB sync
+      pause: seconds=30
+
+    - name: Start Neutron services
+      service: name={{item}} state=started
+      with_items:
+        - neutron-plugin-openvswitch-agent
+        - neutron-dhcp-agent
+        - neutron-l3-agent
+        - neutron-metadata-agent
+
+    - name: Create a network as a non admin user
+      command: neutron --os-tenant-name {{TENANT_NAME}} --os-username {{MEMBER_USER}} --os-password {{MEMBER_PASS}} \
+               --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} net-create private
+
+    - name: Create a subnet as a non admin user
+      command: neutron --os-tenant-name {{TENANT_NAME}} --os-username {{MEMBER_USER}} --os-password {{MEMBER_PASS}} \
+               --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} subnet-create \
+               --name subnet-1 private {{PRIV_SUBNET}}
+
+
