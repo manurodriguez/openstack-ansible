@@ -1,4 +1,4 @@
-- hosts: openstack-stg
+- hosts: openstack-man
 
   vars_files:
   - variables.yml

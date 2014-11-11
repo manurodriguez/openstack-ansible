@@ -17,3 +17,12 @@
      GLANCE_DBPASS: notglance
      GLANCE_USER: glance
      GLANCE_PASS: notglance
+     NEUTRON_DBUSER: neutron
+     NEUTRON_DBPASS: notneutron
+     NEUTRON_USER: neutron
+     NEUTRON_PASS: notneutron
+     NOVA_DBUSER: nova
+     NOVA_DBPASS: notnova
+     NOVA_USER: nova
+     NOVA_PASS: notnova
+     PRIV_SUBNET: 192.168.10.0/29

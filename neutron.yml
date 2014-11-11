@@ -57,8 +57,8 @@
     - name: Populate Neutron endpoint in service catalog
       command: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} \
                --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} endpoint-create --region RegionOne \
-               --service neutron --publicurl=http://{{MY_PUBLIC_IP}}:9696 \
-               --internalurl=http://{{MY_PRIVATE_IP}}:9696 --adminurl=http://{{MY_PRIVATE_IP}}:9696
+               --service neutron --publicurl="http://{{MY_PUBLIC_IP}}:9696" \
+               --internalurl="http://{{MY_PRIVATE_IP}}:9696" --adminurl="http://{{MY_PRIVATE_IP}}:9696"
 
     - name: Configure Neutron DB access 
       lineinfile: "dest=/etc/neutron/neutron.conf regexp='^connection = sqlite'
@@ -78,7 +78,7 @@
 
     - name: Set auth strategy
       lineinfile: "dest=/etc/neutron/neutron.conf regexp='^# auth_strategy' 
-                   line=' auth_strategy = keystone'"
+                   line='auth_strategy = keystone'"
 
     - name: Set admin tenant name 
       lineinfile: "dest=/etc/neutron/neutron.conf regexp='^admin_tenant_name'
@@ -94,7 +94,7 @@
 
     - name: Enable IP Overlapping
       lineinfile: "dest=/etc/neutron/neutron.conf regexp='^# allow_overlapping_ips = False'
-                   line=' allow_overlapping_ips = True'"
+                   line='allow_overlapping_ips = True'"
 
     - name: Set ml2 plugin
       lineinfile: "dest=/etc/neutron/neutron.conf regexp='^core_plugin' 
@@ -102,64 +102,59 @@
 
     - name: Set router service pluglin
       lineinfile: "dest=/etc/neutron/neutron.conf regexp='^# service_plugins'
-                   line=' service_plugins = router'"
+                   line='service_plugins = router'"
 
     - name: Enable port status changes
       lineinfile: "dest=/etc/neutron/neutron.conf regexp='^# notify_nova_on_port_status_changes'
-                   line=' notify_nova_on_port_status_changes = True'"
+                   line='notify_nova_on_port_status_changes = True'"
 
     - name: Enable port data changes
       lineinfile: "dest=/etc/neutron/neutron.conf regexp='^# notify_nova_on_port_data_changes' 
-                   line=' notify_nova_on_port_data_changes = True'"
+                   line='notify_nova_on_port_data_changes = True'"
 
     - name: Set Nova URL
       lineinfile: "dest=/etc/neutron/neutron.conf regexp='^# nova_url' 
-                   line=' nova_url = http://{{MY_PRIVATE_IP}}:8774/v2'"
+                   line='nova_url = http://{{MY_PRIVATE_IP}}:8774/v2'"
 
     - name: Set Nova admin user
       lineinfile: "dest=/etc/neutron/neutron.conf regexp='^# nova_admin_username' 
-                   line=' nova_admin_username = {{NOVA_USER}}'"
+                   line='nova_admin_username = {{NOVA_USER}}'"
 
     - name: Set Nova admin password
       lineinfile: "dest=/etc/neutron/neutron.conf regexp='^# nova_admin_password' 
-                   line=' nova_admin_password = {{NOVA_PASS}}'"
+                   line='nova_admin_password = {{NOVA_PASS}}'"
 
-    - name: Get Nova admin tenant ID
-      command: keystone tenant-get Services | awk '/ id / { print $4 }'
-      register: tenantID
-
-# SERVICE_TENANT_ID=`keystone tenant-get Services | awk '/ id / { print $4 }'`
     - name: Set Nova admin tenant ID on the config
       lineinfile: "dest=/etc/neutron/neutron.conf regexp='^# nova_admin_tenant_id' 
-                   line=' nova_admin_tenant_id = {{tenantID.stdout}}'"
+                   line='nova_admin_tenant_name = Services"
 
     - name: Set Nova admin auth URL
       lineinfile: "dest=/etc/neutron/neutron.conf regexp='^# nova_admin_auth_url' 
-                   line=' nova_admin_auth_url = http://{{MY_PRIVATE_IP}}:35357/v2.0'"
+                   line='nova_admin_auth_url = http://{{MY_PRIVATE_IP}}:35357/v2.0'"
 
     - name: ML2 Set driver types
       lineinfile: "dest=/etc/neutron/plugins/ml2/ml2_conf.ini regexp='^# type_drivers'
-                   line=' type_drivers = gre'"
+                   line='type_drivers = gre'"
 
     - name: ML2 Set network types
       lineinfile: "dest=/etc/neutron/plugins/ml2/ml2_conf.ini regexp='^# tenant_network_types'
-                   line=' tenant_network_types = gre'"
+                   line='tenant_network_types = gre'"
 
     - name: ML2 Set driver mechanisms
       lineinfile: "dest=/etc/neutron/plugins/ml2/ml2_conf.ini regexp='^# mechanism_drivers'
-                   line=' mechanism_drivers = openvswitch'"
+                   line='mechanism_drivers = openvswitch'"
 
     - name: ML2 Set tunnel range id
       lineinfile: "dest=/etc/neutron/plugins/ml2/ml2_conf.ini regexp='^# tunnel_id_ranges'
-                   line=' tunnel_id_ranges = 1:1000'"
+                   line='tunnel_id_ranges = 1:1000'"
 
     - name: ML2 Set firewall driver
       lineinfile: dest=/etc/neutron/plugins/ml2/ml2_conf.ini insertafter='^\[securitygroup\]'
-                  line=' firewall_driver = neutron.agent.linux.iptables_firewall.OVSHybridIptablesFirewallDriver'
+                  line='firewall_driver = neutron.agent.linux.iptables_firewall.OVSHybridIptablesFirewallDriver'
 
     - name: ML2 Enable security group
       lineinfile: "dest=/etc/neutron/plugins/ml2/ml2_conf.ini regexp='^# enable_security_group'
-                   line=' enable_security_group = True'"
+                   line='enable_security_group = True'"
 
     - name: ML2 Add ovs section
       lineinfile: dest=/etc/neutron/plugins/ml2/ml2_conf.ini
@@ -179,47 +174,47 @@
 
     - name: Set DHCP Interface agent
       lineinfile: dest=/etc/neutron/dhcp_agent.ini regexp='^# interface_driver = neutron.agent.linux.interface.OVSInterfaceDriver'
-                  line=' interface_driver = neutron.agent.linux.interface.OVSInterfaceDriver'
+                  line='interface_driver = neutron.agent.linux.interface.OVSInterfaceDriver'
 
     - name: Set DHCP driver
       lineinfile: dest=/etc/neutron/dhcp_agent.ini regexp='^# dhcp_driver = neutron.agent.linux.dhcp.Dnsmasq'
-                  line=' dhcp_driver = neutron.agent.linux.dhcp.Dnsmasq'
+                  line='dhcp_driver = neutron.agent.linux.dhcp.Dnsmasq'
 
     - name: DHCP enable use spaces
       lineinfile: dest=/etc/neutron/dhcp_agent.ini regexp='^# use_namespaces = True'
-                  line=' use_namespaces = True'
+                  line='use_namespaces = True'
 
     - name: DHCP enable isolated metadata
       lineinfile: dest=/etc/neutron/dhcp_agent.ini regexp='^# enable_isolated_metadata'
-                  line=' enable_isolated_metadata = True'
+                  line='enable_isolated_metadata = True'
 
     - name: DHCP enable metadata network
       lineinfile: dest=/etc/neutron/dhcp_agent.ini regexp='^# enable_metadata_network'
-                  line=' enable_metadata_network = True'
+                  line='enable_metadata_network = True'
 
     - name: Set L3 Interface agent
       lineinfile: dest=/etc/neutron/l3_agent.ini regexp='^# interface_driver = neutron.agent.linux.interface.OVSInterfaceDriver'
-                  line=' interface_driver = neutron.agent.linux.interface.OVSInterfaceDriver'
+                  line='interface_driver = neutron.agent.linux.interface.OVSInterfaceDriver'
 
     - name: Enable L3 use namespaces
       lineinfile: dest=/etc/neutron/l3_agent.ini regexp='^# use_namespaces'
-                  line=' use_namespaces = True'
+                  line='use_namespaces = True'
 
     - name: Set Metadata agent nova IP
       lineinfile: dest=/etc/neutron/metadata_agent.ini regexp='^# nova_metadata_ip'
-                  line=' nova_metadata_ip = {{MY_PRIVATE_IP}}'
+                  line='nova_metadata_ip = {{MY_PRIVATE_IP}}'
 
     - name: Set Metadata agent nova port 
       lineinfile: dest=/etc/neutron/metadata_agent.ini regexp='^# nova_metadata_port'
-                  line=' nova_metadata_port = 8775'
+                  line='nova_metadata_port = 8775'
 
     - name: Set Metadata agent proxy shared secret
       lineinfile: dest=/etc/neutron/metadata_agent.ini regexp='^# metadata_proxy_shared_secret'
-                  line=' metadata_proxy_shared_secret = openstack'
+                  line='metadata_proxy_shared_secret = openstack'
 
     - name: Set Metadata agent auth URL
       lineinfile: "dest=/etc/neutron/metadata_agent.ini regexp='^# auth_url'
-                  line=' auth_url = http://{{MY_PRIVATE_IP}}:5000/v2.0'"
+                  line='auth_url = http://{{MY_PRIVATE_IP}}:5000/v2.0'"
 
     - name: Metadata admin tenanat name
       lineinfile: dest=/etc/neutron/metadata_agent.ini regexp='^admin_tenant_name'
@@ -262,5 +257,4 @@
       command: neutron --os-tenant-name {{TENANT_NAME}} --os-username {{MEMBER_USER}} --os-password {{MEMBER_PASS}} \
                --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} subnet-create \
                --name subnet-1 private {{PRIV_SUBNET}}
-
 
