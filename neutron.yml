@@ -239,6 +239,9 @@
     - name: Create Open vSwitch external bridge
       command: ovs-vsctl add-br br-ex
 
+    - name: Associate ext bridge to physical interface
+      command: ovs-vsctl add-port br-ex {{EXT_INTERFACE}}
+
     - name: Start Neutron service
       service: name=neutron-server state=started
 

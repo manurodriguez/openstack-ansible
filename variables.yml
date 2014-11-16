@@ -26,3 +26,4 @@
      NOVA_USER: nova
      NOVA_PASS: notnova
      PRIV_SUBNET: 192.168.10.0/29
+     EXT_INTERFACE: eth1
