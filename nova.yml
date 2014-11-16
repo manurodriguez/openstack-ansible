@@ -78,8 +78,8 @@
                   line='auth_strategy = keystone'
 
     - name: Set Neutron URL
-      lineinfile: "dest=/etc/nova/nova.conf 
-                   line='http://{{MY_PRIVATE_IP}}:9696'"
+      lineinfile: "dest=/etc/nova/nova.conf
+                   line='neutron_url = http://{{MY_PRIVATE_IP}}:9696'"
 
     - name: Set Neutron admin tenant name on the config
       lineinfile: dest=/etc/nova/nova.conf
