@@ -124,9 +124,14 @@
       lineinfile: "dest=/etc/neutron/neutron.conf regexp='^# nova_admin_password' 
                    line='nova_admin_password = {{NOVA_PASS}}'"
 
+    - name: Get Nova admin tenant ID
+      shell: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} \
+             --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} tenant-get Services | awk '/ id / { print $4 }'
+      register: tenantID
+
     - name: Set Nova admin tenant ID on the config
       lineinfile: "dest=/etc/neutron/neutron.conf regexp='^# nova_admin_tenant_id' 
-                   line='nova_admin_tenant_name = Services'"
+                   line='nova_admin_tenant_id = {{tenantID.stdout}}'"
 
     - name: Set Nova admin auth URL
       lineinfile: "dest=/etc/neutron/neutron.conf regexp='^# nova_admin_auth_url' 
