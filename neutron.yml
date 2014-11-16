@@ -126,7 +126,7 @@
 
     - name: Set Nova admin tenant ID on the config
       lineinfile: "dest=/etc/neutron/neutron.conf regexp='^# nova_admin_tenant_id' 
-                   line='nova_admin_tenant_name = Services"
+                   line='nova_admin_tenant_name = Services'"
 
     - name: Set Nova admin auth URL
       lineinfile: "dest=/etc/neutron/neutron.conf regexp='^# nova_admin_auth_url' 
@@ -160,17 +160,17 @@
       lineinfile: dest=/etc/neutron/plugins/ml2/ml2_conf.ini
                   line='[ovs]'
 
-    - name: ML2 Set ovs local IP
+    - name: ML2 Set local IP
       lineinfile: dest=/etc/neutron/plugins/ml2/ml2_conf.ini insertafter='^\[ovs\]'
                   line='local_ip = {{MY_PRIVATE_IP}}'
 
-    - name: ML2 Set ovs local IP
+    - name: ML2 Set Tunnel type
       lineinfile: dest=/etc/neutron/plugins/ml2/ml2_conf.ini insertafter='^\[ovs\]'
                   line='tunnel_type = gre'
 
-    - name: ML2 Set ovs local IP
+    - name: ML2 Enabling Tunneling
       lineinfile: dest=/etc/neutron/plugins/ml2/ml2_conf.ini insertafter='^\[ovs\]'
-                  line='tunnel_type = gre'
+                  line='enable_tunneling = True'
 
     - name: Set DHCP Interface agent
       lineinfile: dest=/etc/neutron/dhcp_agent.ini regexp='^# interface_driver = neutron.agent.linux.interface.OVSInterfaceDriver'
@@ -199,6 +199,10 @@
     - name: Enable L3 use namespaces
       lineinfile: dest=/etc/neutron/l3_agent.ini regexp='^# use_namespaces'
                   line='use_namespaces = True'
+
+    - name: Set L3 dhcp driver
+      lineinfile: dest=/etc/neutron/l3_agent.ini regexp='^# dhcp_driver'
+                  line='dhcp_driver = neutron.agent.linux.dhcp.Dnsmasq'
 
     - name: Set Metadata agent nova IP
       lineinfile: dest=/etc/neutron/metadata_agent.ini regexp='^# nova_metadata_ip'
