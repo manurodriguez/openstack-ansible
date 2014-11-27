@@ -46,4 +46,4 @@ $ PRIVATE_NETNS_ID=qdhcp-$PRIVATE_NET_ID
 $ ip netns exec $PRIVATE_NETNS_ID ip addr
 $ IP_INSTANCE=`nova list | egrep -o '=[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | sed 's/=//'`
 $ ip netns exec $PRIVATE_NETNS_ID ping -c 3 $IP_INSTANCE
-ip netns exec $PRIVATE_NETNS_ID ssh cirros@$IP_INSTANCE
+$ ip netns exec $PRIVATE_NETNS_ID ssh cirros@$IP_INSTANCE
