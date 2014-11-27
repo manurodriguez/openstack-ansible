@@ -3,7 +3,7 @@ openstack-ansible
 
 Openstack deployment using Ansible
 
-This repository provides a series of playbooks in ansible to install Openstack ice-houese services
+This repository provides a series of playbooks in ansible to install Openstack ice-house services
 in a single node, with single NIC on ubuntu 12.04.
 
 Instrucctions
