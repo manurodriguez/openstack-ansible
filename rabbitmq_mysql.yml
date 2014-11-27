@@ -1,3 +1,5 @@
+# Installing and Configuring RabbitMQ, MySQL
+
 - hosts: openstack-man
 
   vars_files:
@@ -16,7 +18,6 @@
       service: name=rabbitmq-server state=stopped enabled=yes
       service: name=mysql state=stopped enabled=yes
 
-     #Configure RabbitMQ
     - name: Create config directory
       file: path=/etc/rabbitmq/rabbitmq.conf.d owner=root state=directory
 

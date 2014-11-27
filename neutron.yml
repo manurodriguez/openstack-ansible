@@ -1,13 +1,13 @@
+# Installing the Neutron Service
+
 - hosts: openstack-man
 
   vars_files:
   - variables.yml
 
-# Installing the Neutron Service
-
   tasks: 
 
-    - name: Install packages
+    - name: Install Neutron packages
       action: apt pkg={{item}} state=installed
       with_items:
         - openvswitch-switch
@@ -40,25 +40,16 @@
       mysql_user: name={{NEUTRON_DBUSER}} password={{NEUTRON_DBPASS}} priv=neutron.*:ALL state=present
 
     - name: Create Neutron Service user
-      command: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} \
-               --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} user-create --tenant {{SERVICE_TENANT_NAME}} \
-               --name {{NEUTRON_USER}} --pass {{NEUTRON_PASS}}
+      command: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} user-create --tenant {{SERVICE_TENANT_NAME}} --name {{NEUTRON_USER}} --pass {{NEUTRON_PASS}}
 
     - name: Grant Admin role to Neutron user
-      command: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} \
-               --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} user-role-add --user {{NEUTRON_USER}} \
-               --tenant {{SERVICE_TENANT_NAME}} --role-id {{ADMIN_ROLE_NAME}}
+      command: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} user-role-add --user {{NEUTRON_USER}} --tenant {{SERVICE_TENANT_NAME}} --role-id {{ADMIN_ROLE_NAME}}
 
     - name: Populate Neutron service in service catalog
-      command: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} \
-               --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} service-create --name=neutron --type=network \
-               --description="Neutron Network Service"
+      command: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} service-create --name=neutron --type=network --description="Neutron Network Service"
 
     - name: Populate Neutron endpoint in service catalog
-      command: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} \
-               --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} endpoint-create --region RegionOne \
-               --service neutron --publicurl="http://{{MY_PUBLIC_IP}}:9696" \
-               --internalurl="http://{{MY_PRIVATE_IP}}:9696" --adminurl="http://{{MY_PRIVATE_IP}}:9696"
+      command: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} endpoint-create --region RegionOne --service neutron --publicurl="http://{{MY_PUBLIC_IP}}:9696" --internalurl="http://{{MY_PRIVATE_IP}}:9696" --adminurl="http://{{MY_PRIVATE_IP}}:9696"
 
     - name: Configure Neutron DB access 
       lineinfile: "dest=/etc/neutron/neutron.conf regexp='^connection = sqlite'
@@ -124,9 +115,9 @@
       lineinfile: "dest=/etc/neutron/neutron.conf regexp='^# nova_admin_password' 
                    line='nova_admin_password = {{NOVA_PASS}}'"
 
+# for some reason if we ise the tenant name instead neutron spawns and dies
     - name: Get Nova admin tenant ID
-      shell: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} \
-             --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} tenant-get Services | awk '/ id / { print $4 }'
+      shell: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} tenant-get Services | awk '/ id / { print $4 }'
       register: tenantID
 
     - name: Set Nova admin tenant ID on the config
@@ -251,7 +242,7 @@
       service: name=neutron-server state=started
 
     - name: Wait for neutron-server to automatically run DB sync
-      pause: seconds=30
+      pause: seconds=15
 
     - name: Start Neutron services
       service: name={{item}} state=started
@@ -261,12 +252,9 @@
         - neutron-l3-agent
         - neutron-metadata-agent
 
-    - name: Create a network as a non admin user
-      command: neutron --os-tenant-name {{TENANT_NAME}} --os-username {{MEMBER_USER}} --os-password {{MEMBER_PASS}} \
-               --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} net-create private
+    - name: Create a private network as a non admin user
+      command: neutron --os-tenant-name {{TENANT_NAME}} --os-username {{MEMBER_USER}} --os-password {{MEMBER_PASS}} --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} net-create internal
 
-    - name: Create a subnet as a non admin user
-      command: neutron --os-tenant-name {{TENANT_NAME}} --os-username {{MEMBER_USER}} --os-password {{MEMBER_PASS}} \
-               --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} subnet-create \
-               --name subnet-1 private {{PRIV_SUBNET}}
+    - name: Create a private subnet as a non admin user
+      command: neutron --os-tenant-name {{TENANT_NAME}} --os-username {{MEMBER_USER}} --os-password {{MEMBER_PASS}} --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} subnet-create --name privatenet internal {{PRIV_SUBNET}}
 

@@ -1,7 +1,7 @@
      RABBIT_PASS: notrabbitmq
      MYSQL_ROOTPASS: notmysql
      MY_PRIVATE_IP: 127.0.0.1
-     MY_PUBLIC_IP: 127.0.0.1
+     MY_PUBLIC_IP: "{{ inventory_hostname }}"
      AUTH_URL: http://127.0.0.1:5000/v2.0/
      KEYSTONE_DBUSER: keystone
      KEYSTONE_DBPASS: notkeystone
@@ -25,5 +25,5 @@
      NOVA_DBPASS: notnova
      NOVA_USER: nova
      NOVA_PASS: notnova
-     PRIV_SUBNET: 192.168.10.0/29
+     PRIV_SUBNET: 192.168.1.0/24
      EXT_INTERFACE: eth1

@@ -1,4 +1,4 @@
-- hosts: openstack-man
+- hosts: openstack-uk
 
   vars_files:
   - variables.yml
@@ -13,3 +13,6 @@
     - name: 
       lineinfile: "dest=/etc/nova/nova-compute.conf regexp='^virt_type' 
                    line='virt_type=qemu'"
+
+    - name: Restart Nova-compute service
+      service: name=nova-compute state=restarted enabled=yes

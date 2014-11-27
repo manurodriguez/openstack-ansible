@@ -1,13 +1,13 @@
+# Installing the Nova Service
+
 - hosts: openstack-man
 
   vars_files:
   - variables.yml
 
-# Installing the Nova Service
-
   tasks: 
 
-    - name: Install packages
+    - name: Install Nova packages
       action: apt pkg={{item}} state=installed
       with_items:
         - nova-api 
@@ -32,11 +32,12 @@
     - name: Remove SQLite default db
       shell: rm -f /var/lib/nova/nova.sqlite
 
-# For KVM support    
+# For KVM support uncomment these lines 
 #    - name: Ensure KVM kernel Module is loaded
 #      lineinfile: dest=/etc/modules
 #                  line='kvm'
 
+# This could be intel or amd depending on your system
 #    - name: Ensure KVM amd kernel Module is loaded
 #      lineinfile: dest=/etc/modules
 #                  line='kvm-intel'
@@ -48,26 +49,16 @@
       mysql_user: name={{NOVA_DBUSER}} password={{NOVA_DBPASS}} priv=nova.*:ALL state=present
 
     - name: Create Nova Service user
-      command: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} \
-               --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} user-create --tenant {{SERVICE_TENANT_NAME}} \
-               --name {{NOVA_USER}} --pass {{NOVA_PASS}}
+      command: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} user-create --tenant {{SERVICE_TENANT_NAME}} --name {{NOVA_USER}} --pass {{NOVA_PASS}}
 
     - name: Grant Admin role to Nova user
-      command: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} \
-               --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} user-role-add --user {{NOVA_USER}} \
-               --tenant {{SERVICE_TENANT_NAME}} --role-id {{ADMIN_ROLE_NAME}}
+      command: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} user-role-add --user {{NOVA_USER}} --tenant {{SERVICE_TENANT_NAME}} --role-id {{ADMIN_ROLE_NAME}}
 
     - name: Populate Nova service in service catalog
-      command: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} \
-               --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} service-create --name=nova --type=compute \
-               --description="Nova Compute Service"
+      command: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} service-create --name=nova --type=compute --description="Nova Compute Service"
 
     - name: Populate Nova endpoint in service catalog
-      command: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} \
-               --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} endpoint-create --region RegionOne \
-               --service nova --publicurl="http://{{MY_PUBLIC_IP}}:8774/v2/%(tenant_id)s" \
-               --internalurl="http://{{MY_PRIVATE_IP}}:8774/v2/%(tenant_id)s" \
-               --adminurl="http://{{MY_PRIVATE_IP}}:8774/v2/%(tenant_id)s"
+      command: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} endpoint-create --region RegionOne --service nova --publicurl="http://{{MY_PUBLIC_IP}}:8774/v2/%(tenant_id)s" --internalurl="http://{{MY_PRIVATE_IP}}:8774/v2/%(tenant_id)s" --adminurl="http://{{MY_PRIVATE_IP}}:8774/v2/%(tenant_id)s"
 
     - name: Set Api class
       lineinfile: dest=/etc/nova/nova.conf
@@ -151,7 +142,7 @@
 
     - name: Set VNC Proxy address
       lineinfile: dest=/etc/nova/nova.conf
-                  line='vncserver_proxyclient_address = {{MY_PRIVATE_IP}}'
+                  line='vncserver_proxyclient_address = {{MY_PUBLIC_IP}}'
 
     - name: Set VNC listen IP
       lineinfile: dest=/etc/nova/nova.conf

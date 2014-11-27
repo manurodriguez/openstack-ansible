@@ -1,13 +1,12 @@
+# Installing the Image Service
 - hosts: openstack-man
 
   vars_files:
   - variables.yml
 
-# Install the Identity Service
-
   tasks: 
 
-    - name: Install packages
+    - name: Install Glance packages
       apt: name=glance state=latest
 
     - name: Stop Glance-registry service
@@ -26,25 +25,16 @@
       mysql_user: name={{GLANCE_DBUSER}} password={{GLANCE_DBPASS}} priv=glance.*:ALL state=present
 
     - name: Create Glance Service user
-      command: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} \
-               --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} user-create --tenant {{SERVICE_TENANT_NAME}} \
-               --name {{GLANCE_USER}} --pass {{GLANCE_PASS}}
+      command: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} user-create --tenant {{SERVICE_TENANT_NAME}} --name {{GLANCE_USER}} --pass {{GLANCE_PASS}}
 
     - name: Grant Admin role to Glance user
-      command: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} \
-               --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} user-role-add --user {{GLANCE_USER}} \
-               --tenant {{SERVICE_TENANT_NAME}} --role-id {{ADMIN_ROLE_NAME}}
+      command: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} user-role-add --user {{GLANCE_USER}} --tenant {{SERVICE_TENANT_NAME}} --role-id {{ADMIN_ROLE_NAME}}
 
     - name: Populate Glance service in service catalog
-      command: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} \
-               --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} service-create --name=glance --type=image \
-               --description="Glance Image Service"
+      command: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} service-create --name=glance --type=image --description="Glance Image Service"
 
     - name: Populate Glance endpoint in service catalog
-      command: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} \
-               --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} endpoint-create --region RegionOne \
-               --service glance --publicurl=http://{{MY_PUBLIC_IP}}:9292/v1 \
-               --internalurl=http://{{MY_PRIVATE_IP}}:9292/v1 --adminurl=http://{{MY_PRIVATE_IP}}:9292/v1
+      command: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} endpoint-create --region RegionOne --service glance --publicurl=http://{{MY_PUBLIC_IP}}:9292/v1 --internalurl=http://{{MY_PRIVATE_IP}}:9292/v1 --adminurl=http://{{MY_PRIVATE_IP}}:9292/v1
 
     - name: Configure Glance DB access (registry)
       lineinfile: "dest=/etc/glance/glance-registry.conf regexp='^#connection'
@@ -122,6 +112,4 @@
       command: wget http://cdn.download.cirros-cloud.net/0.3.2/cirros-0.3.2-x86_64-disk.img -O ~/images/cirros-0.3.2-x86_64-disk.qcow2
 
     - name: Register a qcow2 image
-      command: glance --os-tenant-name {{TENANT_NAME}} --os-username {{MEMBER_USER}} --os-password {{MEMBER_PASS}} \
-               --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} image-create --name "cirros-qcow2" \
-               --disk-format qcow2 --container-format bare --is-public True --file ~/images/cirros-0.3.2-x86_64-disk.qcow2
+      command: glance --os-tenant-name {{TENANT_NAME}} --os-username {{MEMBER_USER}} --os-password {{MEMBER_PASS}} --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} image-create --name "cirros-qcow2" --disk-format qcow2 --container-format bare --is-public True --file ~/images/cirros-0.3.2-x86_64-disk.qcow2

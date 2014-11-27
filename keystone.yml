@@ -1,13 +1,13 @@
+# Install the Identity Service
+
 - hosts: openstack-man
 
   vars_files:
   - variables.yml
 
-# Install the Identity Service
-
   tasks: 
 
-    - name: Install packages
+    - name: Install Keystone packages
       apt: name=keystone state=latest
 
     - name: Stop Keystone service
@@ -88,8 +88,7 @@
         OS_SERVICE_TOKEN: ADMIN
 
     - name: Populate endpoint in service catalog
-      command: keystone endpoint-create --region RegionOne --service keystone --publicurl=http://{{MY_PUBLIC_IP}}:5000/v2.0 \
-               --internalurl=http://{{MY_PRIVATE_IP}}:5000/v2.0 --adminurl=http://{{MY_PRIVATE_IP}}:35357/v2.0 
+      command: keystone endpoint-create --region RegionOne --service keystone --publicurl=http://{{MY_PUBLIC_IP}}:5000/v2.0 --internalurl=http://{{MY_PRIVATE_IP}}:5000/v2.0 --adminurl=http://{{MY_PRIVATE_IP}}:35357/v2.0 
       environment:
         OS_SERVICE_ENDPOINT: http://127.0.0.1:35357/v2.0
         OS_SERVICE_TOKEN: ADMIN
