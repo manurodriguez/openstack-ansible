@@ -36,6 +36,16 @@
     - name: Remove old menu.lst
       command: rm -f /boot/grub/menu.lst
 
+    - name: Reboot server to boot new kernel and load openvswitch support
+      shell: shutdown -r now
+      async: 0
+      poll: 0
+      ignore_errors: true
+
+    - name: Waiting for server to come back
+      local_action: wait_for host={{ inventory_hostname }} port=22 state=started
+      sudo: false
+
 
 # Installing and Configuring RabbitMQ, MySQL
 
@@ -295,10 +305,15 @@
 
 # Installing the Neutron Service
 
+    - name: Install openvswitch packages
+      apt: name=openvswitch-switch state=installed
+
+    - name: Restart Open vSwitch service
+      service: name=openvswitch-switch state=restarted enabled=yes
+
     - name: Install Neutron packages
       action: apt pkg={{item}} state=installed
       with_items:
-        - openvswitch-switch
         - neutron-server 
         - neutron-plugin-ml2 
         - neutron-plugin-openvswitch-agent
@@ -306,8 +321,47 @@
         - neutron-l3-agent
         - neutron-metadata-agent
 
-    - name: Restart Open vSwitch service
-      service: name=openvswitch-switch state=restarted enabled=yes
+
+# Internal bridge created by default during the installation
+    - name: Create Open vSwitch integration external bridge
+      command: ovs-vsctl add-br br-ext
+
+# Configuring bridge
+    - name: Replacing current interface with a bridge
+      replace: dest=/etc/network/interfaces regexp='{{EXT_INTERFACE}}' replace='br-ext'
+
+    - name: Adding auto parameter on current interface
+      lineinfile: dest=/etc/network/interfaces insertbefore='^auto br-ext' line='auto {{EXT_INTERFACE}}'
+    
+    - name: Adding manual flag on current interface
+      lineinfile: dest=/etc/network/interfaces insertbefore='^auto br-ext' line='iface {{EXT_INTERFACE}} inet manual'
+    
+    - name: Adding ovs type on physical interface
+      lineinfile: dest=/etc/network/interfaces insertbefore="^auto br-ext" line='\tovs_type OVSPort'
+
+    - name: Adding ovs bridge on physical interface
+      lineinfile: dest=/etc/network/interfaces insertbefore="^auto br-ext" line='\tovs_bridge br-ext'
+
+    - name: Adding link up parameter on current interface
+      lineinfile: dest=/etc/network/interfaces insertbefore="^auto br-ext" line='\tup ifconfig $IFACE 0.0.0.0 up'
+
+    - name: Adding promisc mode parameter on current interface
+      lineinfile: dest=/etc/network/interfaces insertbefore="^auto br-ext" line='\tup ip link set $IFACE promisc on'
+
+    - name: Adding link down parameter on current interface
+      lineinfile: dest=/etc/network/interfaces insertbefore="^auto br-ext" line='\tdown ifconfig $IFACE down\n'
+
+    - name: Adding ovs bridge on bridge interface
+      lineinfile: dest=/etc/network/interfaces insertafter="^iface br-ext inet static" line='    ovs_bridge br-ext'
+
+    - name: Adding ovs type on bridge interface
+      lineinfile: dest=/etc/network/interfaces insertafter="^iface br-ext inet static" line='    ovs_type OVSBridge'
+
+    - name: Network restart
+      shell: ifdown br-ext ; ifdown {{EXT_INTERFACE}} ; ifup {{EXT_INTERFACE}} ; ifup br-ext
+      
+
+# Continue with Neutron configuration
 
     - name: Stop Neutron services
       service: name={{item}} state=stopped enabled=yes
@@ -515,10 +569,6 @@
     - name: Metadata admin password
       lineinfile: dest=/etc/neutron/metadata_agent.ini regexp='^admin_password'
                   line='admin_password = {{NEUTRON_PASS}}'
-
-# Internal bridge created by default during the installation
-#    - name: Create Open vSwitch integration bridge
-#      command: ovs-vsctl add-br br-int
 
     - name: Start Neutron service
       service: name=neutron-server state=started
@@ -737,47 +787,4 @@
         - nova-consoleauth
         - nova-novncproxy
         - nova-compute
-
-
-# Configuring bridge and reboot server
-
-    - name: Replacing current interface with a bridge
-      replace: dest=/etc/network/interfaces regexp='{{EXT_INTERFACE}}' replace='br-ext'
-
-    - name: Adding auto parameter on current interface
-      lineinfile: dest=/etc/network/interfaces insertbefore="^auto br-ext" line='auto {{EXT_INTERFACE}}'
-    
-    - name: Adding manual flag on current interface
-      lineinfile: dest=/etc/network/interfaces insertbefore="^auto br-ext" line='iface {{EXT_INTERFACE}} inet manual'
-    
-    - name: Adding ovs type on physical interface
-      lineinfile: dest=/etc/network/interfaces insertbefore="^auto br-ext" line='\tovs_type OVSPort'
-
-    - name: Adding ovs bridge on physical interface
-      lineinfile: dest=/etc/network/interfaces insertbefore="^auto br-ext" line='\tovs_bridge br-ext'
-
-    - name: Adding link up parameter on current interface
-      lineinfile: dest=/etc/network/interfaces insertbefore="^auto br-ext" line='\tup ifconfig $IFACE 0.0.0.0 up'
-
-    - name: Adding promisc mode parameter on current interface
-      lineinfile: dest=/etc/network/interfaces insertbefore="^auto br-ext" line='\tup ip link set $IFACE promisc on'
-
-    - name: Adding link down parameter on current interface
-      lineinfile: dest=/etc/network/interfaces insertbefore="^auto br-ext" line='\tdown ifconfig $IFACE down\n'
-
-    - name: Adding ovs type on bridge interface
-      lineinfile: dest=/etc/network/interfaces insertafter="^auto br-ext" line='\tovs_type OVSBridge'
-
-    - name: Adding ovs bridge on bridge interface
-      lineinfile: dest=/etc/network/interfaces insertafter="^auto br-ext" line='\tovs_bridge br-ext'
-
-    - name: Restart server to boot new kernel and restart all services
-      shell: shutdown -r now 
-      async: 0
-      poll: 0
-      ignore_errors: true
-
-    - name: Waiting for server to come back
-      local_action: wait_for host={{ inventory_hostname }} port=22 state=started
-      sudo: false
 

@@ -1,5 +1,6 @@
 # Creating and instance and applying sec rules
-- hosts: openstack-uk
+
+- hosts: openstack-stg
 
   vars_files:
   - variables.yml
@@ -14,6 +15,5 @@
 
     - name: Update default security group to allow host access to guest subnet
       command: neutron --os-tenant-name {{TENANT_NAME}} --os-username {{MEMBER_USER}} --os-password {{MEMBER_PASS}} --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} security-group-rule-create --direction ingress --ethertype IPv4 --protocol icmp --remote-ip-prefix {{PRIV_SUBNET}} default
-
 
 

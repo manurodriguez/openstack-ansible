@@ -1,9 +1,10 @@
-- hosts: openstack-uk
+# for systems that do not support hardware acceleration
+#
+- hosts: openstack-stg
 
   vars_files:
   - variables.yml
 
-# for systems that do not support hardware acceleration
 
   tasks:
 
