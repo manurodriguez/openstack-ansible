@@ -1,0 +1,34 @@
+# Deploying mongodb replication
+
+- hosts: mongo-repl
+
+  vars_files:
+  - mongovars.yml
+
+  tasks:
+    - name: Adding MongoDB repository
+      template: src=mongodb.repo dest=/etc/yum.repos.d/mongodb.repo
+
+    - name: Install the latest version of MongoDB
+      yum: name=mongodb-org state=latest
+
+    - name: Bind MongoDB to Internal IP
+      replace: dest=/etc/mongod.conf regexp='^bind_ip=127.0.0.1$' replace='bind_ip=0.0.0.0'
+
+    - name: Setting Standard MongoDB Port
+      replace: dest=/etc/mongod.conf regexp='^#port=27017$' replace='port=27017'
+
+    - name: Adding the replica Set name
+      replace: dest=/etc/mongod.conf regexp='^#replSet=setname$' replace='replSet={{REPL_NAME}}'
+
+    - name: Start MongoDB service and enable at boot time
+      service: name=mongod state=started enabled=yes
+
+    - name: Adding the list of members
+      template: src=hosts.j2 dest=/etc/hosts
+
+    - name: Allowing mongoDB traffic via iptables
+      template: src=iptables.j2 dest=/etc/sysconfig/iptables
+
+    - name: Restarting iptables
+      service: name=iptables state=restarted enabled=yes
