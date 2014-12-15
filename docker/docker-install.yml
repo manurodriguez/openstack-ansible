@@ -1,0 +1,20 @@
+# Deploying mongodb replication
+
+- hosts: docker
+
+  tasks:
+    - name: Adding Epel repository
+      yum: name=epel-release state=latest
+
+    - name: Install the latest version of Docker
+      yum: name=docker-io state=latest
+
+    - name: Install the latest version of Docker client
+      yum: name=python-docker-py state=latest
+
+    - name: Start Docker service and enable at boot time
+      service: name=docker state=started enabled=yes
+
+    - name:  Start centos instance
+      command: docker pull centos
+

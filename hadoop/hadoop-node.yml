@@ -1,0 +1,73 @@
+# Installing the Image Service
+
+- hosts: hadoop-stg
+
+  vars_files:
+  - variables.yml
+
+  tasks: 
+
+    - name: Installing OpenJDK package
+      yum: name=java-1.8.0-openjdk state=present
+
+    - name: Download hadoop
+      command: wget http://www.carfab.com/apachesoftware/hadoop/common/hadoop-2.6.0/hadoop-2.6.0.tar.gz -O ~/software/hadoop-2.6.0.tar.gz
+
+    - name: Untar hadoop
+      command: tar zxf ~/software/hadoop-2.6.0.tar.gz -C /usr/local/
+
+    - name: Add Java Home on hadoop env
+      lineinfile: dest=/usr/local/hadoop-2.6.0/etc/hadoop/hadoop-env.sh regexp='^export JAVA_HOME='
+                  line='export JAVA_HOME=/usr'
+
+    - name: Add Hadoop Home on env config
+      lineinfile: dest=/usr/local/hadoop-2.6.0/etc/hadoop/hadoop-env.sh inserafter='export JAVA_HOME=/usr'
+                  line='export HADOOP_PREFIX=/usr/local/hadoop-2.6.0'
+
+    - name: Add Hadoop opts on env config
+      lineinfile: dest=/usr/local/hadoop-2.6.0/etc/hadoop/hadoop-env.sh inserafter='export JAVA_HOME=/usr'
+                  line='export HADOOP_OPTS=-Djava.net.preferIPv4Stack=true'
+
+    - name: creating hadoop user
+      user: name=hadoop password={{HADOOP_PASS}} generate_ssh_key=yes ssh_key_bits=2048
+
+    - name: Authorizing the ssh key
+      command: cat /home/hadoop/.ssh/id_rsa.pub >> /home/hadoop/.ssh/authorized_keys
+
+    - name: Changing permissions of authorized_keys file
+      file: path=/home/hadoop/.ssh/authorized_keys owner=hadoop group=hadoop mode=600 state=file
+
+    - name: Adding Path variables 1
+      lineinfile: dest=/home/hadoop/.bashrc line='export HADOOP_HOME=/usr/local/hadoop-2.6.0'
+
+    - name: Adding Path variables 2
+      lineinfile: dest=/home/hadoop/.bashrc line='export PATH=$PATH:$HADOOP_HOME/sbin:$HADOOP_HOME/bin'
+
+    - name: Adding the list of nodes
+      template: src=config/hosts.j2 dest=/etc/hosts
+
+    - name: Allowing hadoop traffic via iptables
+      template: src=config/iptables.j2 dest=/etc/sysconfig/iptables
+
+    - name: Restarting iptables
+      service: name=iptables state=restarted enabled=yes
+
+    - name: Adding core-site.xml file
+      template: src=config/core-site.j2 dest=dest=/usr/local/hadoop-2.6.0/etc/hadoop/core-site.xml
+
+    - name: Adding mapred-site.xml file
+      template: src=config/mapred-site.j2 dest=dest=/usr/local/hadoop-2.6.0/etc/hadoop/mapred-site.xml
+
+    - name: Copy hdfs-site.xml file
+      copy: src=config/hdfs-site.xml dest=/usr/local/hadoop-2.6.0/etc/hadoop/hdfs-site.xml
+
+# master only
+    - name: Adding masters file
+      template: src=config/masters.j2 dest=dest=/usr/local/hadoop-2.6.0/etc/hadoop/masters
+
+    - name: Adding slaves file
+      template: src=config/slaves.j2 dest=dest=/usr/local/hadoop-2.6.0/etc/hadoop/slaves
+######
+    - name: Change owner on hadoop directory
+      file: path=/usr/local/hadoop-2.6.0 owner=hadoop group=root state=directory recurse=yes
+

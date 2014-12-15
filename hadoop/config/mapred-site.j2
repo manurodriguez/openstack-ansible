@@ -1,0 +1,8 @@
+<configuration>
+<property>
+    <name>mapred.job.tracker</name>
+{% for host in groups['hadoop_master'] %}
+    <value>{{hostvars[host]['ansible_hostname']}}:9001/</value>
+{% endfor %}
+</property>
+</configuration>
