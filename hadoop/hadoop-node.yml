@@ -1,6 +1,6 @@
-# Installing the Image Service
+# Installing an slave node
 
-- hosts: hadoop-stg
+- hosts: hadoop-nodes
 
   vars_files:
   - variables.yml
@@ -11,28 +11,28 @@
       yum: name=java-1.8.0-openjdk state=present
 
     - name: Download hadoop
-      command: wget http://www.carfab.com/apachesoftware/hadoop/common/hadoop-2.6.0/hadoop-2.6.0.tar.gz -O ~/software/hadoop-2.6.0.tar.gz
+      command: wget http://www.carfab.com/apachesoftware/hadoop/common/hadoop-2.6.0/hadoop-2.6.0.tar.gz
 
     - name: Untar hadoop
-      command: tar zxf ~/software/hadoop-2.6.0.tar.gz -C /usr/local/
+      command: tar zxf hadoop-2.6.0.tar.gz -C /usr/local/
 
     - name: Add Java Home on hadoop env
       lineinfile: dest=/usr/local/hadoop-2.6.0/etc/hadoop/hadoop-env.sh regexp='^export JAVA_HOME='
                   line='export JAVA_HOME=/usr'
 
     - name: Add Hadoop Home on env config
-      lineinfile: dest=/usr/local/hadoop-2.6.0/etc/hadoop/hadoop-env.sh inserafter='export JAVA_HOME=/usr'
+      lineinfile: dest=/usr/local/hadoop-2.6.0/etc/hadoop/hadoop-env.sh insertafter='export JAVA_HOME=/usr'
                   line='export HADOOP_PREFIX=/usr/local/hadoop-2.6.0'
 
     - name: Add Hadoop opts on env config
-      lineinfile: dest=/usr/local/hadoop-2.6.0/etc/hadoop/hadoop-env.sh inserafter='export JAVA_HOME=/usr'
+      lineinfile: dest=/usr/local/hadoop-2.6.0/etc/hadoop/hadoop-env.sh insertafter='export JAVA_HOME=/usr'
                   line='export HADOOP_OPTS=-Djava.net.preferIPv4Stack=true'
 
     - name: creating hadoop user
       user: name=hadoop password={{HADOOP_PASS}} generate_ssh_key=yes ssh_key_bits=2048
 
     - name: Authorizing the ssh key
-      command: cat /home/hadoop/.ssh/id_rsa.pub >> /home/hadoop/.ssh/authorized_keys
+      shell: cat /home/hadoop/.ssh/id_rsa.pub > /home/hadoop/.ssh/authorized_keys
 
     - name: Changing permissions of authorized_keys file
       file: path=/home/hadoop/.ssh/authorized_keys owner=hadoop group=hadoop mode=600 state=file
@@ -61,13 +61,9 @@
     - name: Copy hdfs-site.xml file
       copy: src=config/hdfs-site.xml dest=/usr/local/hadoop-2.6.0/etc/hadoop/hdfs-site.xml
 
-# master only
-    - name: Adding masters file
-      template: src=config/masters.j2 dest=dest=/usr/local/hadoop-2.6.0/etc/hadoop/masters
-
     - name: Adding slaves file
       template: src=config/slaves.j2 dest=dest=/usr/local/hadoop-2.6.0/etc/hadoop/slaves
-######
+
     - name: Change owner on hadoop directory
       file: path=/usr/local/hadoop-2.6.0 owner=hadoop group=root state=directory recurse=yes
 

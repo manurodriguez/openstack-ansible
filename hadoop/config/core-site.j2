@@ -1,9 +1,7 @@
 <configuration>
 <property>
     <name>fs.default.name</name>
-{% for host in groups['hadoop_master'] %}
-    <value>hdfs://{{hostvars[host]['ansible_hostname']}}:9000/</value>
-{% endfor %}
+    <value>hdfs://{{hostvars['hadoop-master']['ansible_hostname']}}:9000/</value>
 </property>
 <property>
     <name>dfs.permissions</name>

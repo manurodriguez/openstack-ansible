@@ -1,2 +1,0 @@
-     MONGO1_IP: "{{ inventory_hostname }}"
-     REPL_NAME: myrepl

@@ -15,6 +15,6 @@
     - name: Start Docker service and enable at boot time
       service: name=docker state=started enabled=yes
 
-    - name:  Start centos instance
-      command: docker pull centos
+#    - name:  Start centos instance
+#      command: docker pull centos
 

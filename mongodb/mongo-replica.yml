@@ -2,8 +2,8 @@
 
 - hosts: mongo-repl
 
-  vars_files:
-  - mongovars.yml
+  vars:
+   REPL_NAME: myrepl
 
   tasks:
     - name: Adding MongoDB repository
