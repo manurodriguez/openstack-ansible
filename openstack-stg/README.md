@@ -1,7 +1,7 @@
 openstack-stg
 =================
 
-To Verify your instance is running and login perfor the following:
+To Verify your instance is running and login perform the following:
 
 $ source credentials/admin
 
