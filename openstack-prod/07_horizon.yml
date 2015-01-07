@@ -1,0 +1,26 @@
+# Dashboard installation
+
+- hosts: openstack-stg
+
+  vars_files:
+  - variables.yml
+
+  tasks:
+
+    - name: Install Horizon Dashboard
+      action: apt pkg={{item}} state=installed
+      with_items:
+        - apache2
+        - memcached
+        - libapache2-mod-wsgi
+        - openstack-dashboard
+
+    - name: Remove Ubuntu theme
+      apt: name=openstack-dashboard-ubuntu-theme state=absent purge=yes force=yes
+
+    - name: Making sure apache and memcached are enabled and running
+      service: name={{item}} state=started enabled=yes
+      with_items: 
+        - apache2
+        - memcached
+
