@@ -1,0 +1,790 @@
+# Initial setup
+
+- hosts: openstack-stg
+
+  vars_files:
+  - variables.yml
+
+  tasks:
+    - name: Updating package list
+      apt: update_cache=yes
+
+    - name: Install Ubuntu Cloud Keyring
+      action: apt pkg={{item}} state=installed
+      with_items:
+        - ubuntu-cloud-keyring
+        - python-software-properties
+
+    - name: Add Ubuntu Cloud Archive repository for Icehouse
+      apt_repository: repo='deb http://ubuntu-cloud.archive.canonical.com/ubuntu precise-updates/icehouse main' state=present
+
+    - name: Update all packages to the latest version
+      apt: upgrade=dist
+
+    - name: Install Ubuntu backported kernel > 13.10
+      action: apt pkg={{item}} state=installed
+      with_items:
+        - linux-image-generic-lts-saucy 
+        - linux-headers-generic-lts-saucy
+
+    - name: Install ntp service
+      apt: name=ntp state=present
+
+    - name: Making sure ntp is enabled and running
+      service: name=ntp state=started enabled=yes
+
+    - name: Remove old menu.lst
+      command: rm -f /boot/grub/menu.lst
+
+    - name: Reboot server to boot new kernel and load openvswitch support
+      shell: shutdown -r now
+      async: 0
+      poll: 0
+      ignore_errors: true
+
+    - name: Waiting for server to come back
+      local_action: wait_for host={{ inventory_hostname }} port=22 state=started
+      sudo: false
+
+
+# Installing and Configuring RabbitMQ, MySQL
+
+    - name: Installing RabbitMQ and MySQL
+      action: apt pkg={{item}} state=installed
+      with_items: 
+        - rabbitmq-server
+        - mysql-server
+        - python-mysqldb
+
+    - name: Stop services and enable at boot time
+      service: name=rabbitmq-server state=stopped enabled=yes
+      service: name=mysql state=stopped enabled=yes
+
+    - name: Create config directory
+      file: path=/etc/rabbitmq/rabbitmq.conf.d owner=root state=directory
+
+    - name: Configure RabbitMQ
+      file: path=/etc/rabbitmq/rabbitmq.conf.d/rabbitmq-listen.conf state=touch owner=root group=root mode=0644
+
+    - name: Add private IP on rabbitMQ configuration
+      lineinfile: dest=/etc/rabbitmq/rabbitmq.conf.d/rabbitmq-listen.conf line='RABBITMQ_NODE_IP_ADDRESS={{MY_PRIVATE_IP}}'
+
+    - name: Configure MySQL character set
+      lineinfile: dest=/etc/mysql/my.cnf insertbefore="^\[mysqldump\]" line='character-set-server = utf8'
+    
+    - name: Configure MySQL Collation
+      lineinfile: dest=/etc/mysql/my.cnf insertbefore="^\[mysqldump\]" line='collation-server = utf8_general_ci'
+
+    - name: Configure utf8 for connections
+      lineinfile: dest=/etc/mysql/my.cnf insertbefore="^\[mysqldump\]" line="init-connect='SET NAMES utf8'" 
+
+    - name: Start MySQL
+      service: name=mysql state=started enabled=yes
+
+    - name: Change default rabbitmq guest password
+      shell: rabbitmqctl change_password guest {{ RABBIT_PASS }}
+
+    - name: Setup MySQL root password
+      action: command mysqladmin -u root password {{ MYSQL_ROOTPASS }}
+
+    - name: Preserve MySQL credentials
+      shell:  echo "[client]\nuser=root\npassword={{MYSQL_ROOTPASS}}\n\n[mysql]\nuser=root\npassword={{MYSQL_ROOTPASS}}" > /root/.my.cnf
+
+    - name: Secure /root/.my.cnf file
+      file: path=/root/.my.cnf owner=root group=root mode=0600
+
+
+# Install the Identity Service
+
+    - name: Install Keystone packages
+      apt: name=keystone state=latest
+
+    - name: Stop Keystone service
+      service: name=keystone state=stopped enabled=yes
+
+    - name: Remove SQLite default db
+      shell: rm -f /var/lib/keystone/keystone.db
+    
+    - name: Create Keystone DB
+      mysql_db: name=keystone state=present
+
+    - name: Create Keystone DB user/pass
+      mysql_user: name={{ KEYSTONE_DBUSER }} password={{ KEYSTONE_DBPASS }} priv=keystone.*:ALL state=present
+
+# 
+    - name: Configure Keystone DB access
+      lineinfile: "dest=/etc/keystone/keystone.conf regexp='^connection'
+                   line='connection = mysql://{{KEYSTONE_DBUSER}}:{{KEYSTONE_DBPASS}}@{{MY_PRIVATE_IP}}/keystone'"
+
+    - name: Set keystone public endpoint URL
+      lineinfile: "dest=/etc/keystone/keystone.conf regexp='^#public_endpoint' 
+                   line='public_endpoint=http://{{MY_PUBLIC_IP}}:%(public_port)s/'"
+
+    - name: Set keystone admin endpoint URL
+      lineinfile: "dest=/etc/keystone/keystone.conf regexp='^#admin_endpoint' 
+                   line='admin_endpoint=http://{{MY_PRIVATE_IP}}:%(admin_port)s/'"
+
+    - name: Set rabbit pass on keystone config
+      lineinfile: "dest=/etc/keystone/keystone.conf regexp='^#rabbit_password'
+                   line='rabbit_password = {{RABBIT_PASS}}'"
+
+    - name: Initialize Keystone database
+      shell: keystone-manage db_sync
+
+    - name: Start Keystone service
+      service: name=keystone state=started enabled=yes
+
+    - name: Create Main tenant
+      command: keystone tenant-create --name {{TENANT_NAME}} 
+      environment:
+        OS_SERVICE_ENDPOINT: http://127.0.0.1:35357/v2.0
+        OS_SERVICE_TOKEN: ADMIN
+
+    - name: Create Service tenant
+      command: keystone tenant-create --name {{SERVICE_TENANT_NAME}}
+      environment:
+        OS_SERVICE_ENDPOINT: http://127.0.0.1:35357/v2.0
+        OS_SERVICE_TOKEN: ADMIN
+
+    - name: Create Admin role
+      command: keystone role-create --name {{ADMIN_ROLE_NAME}} 
+      environment:
+        OS_SERVICE_ENDPOINT: http://127.0.0.1:35357/v2.0
+        OS_SERVICE_TOKEN: ADMIN
+
+    - name: Create Admin user
+      command: keystone user-create --tenant {{TENANT_NAME}} --name {{ADMIN_USER}} --pass {{ADMIN_PASS}}
+      environment:
+        OS_SERVICE_ENDPOINT: http://127.0.0.1:35357/v2.0
+        OS_SERVICE_TOKEN: ADMIN
+
+    - name: Create Non-admin user
+      command: keystone user-create --tenant {{TENANT_NAME}} --name {{MEMBER_USER}} --pass {{MEMBER_PASS}}
+      environment:
+        OS_SERVICE_ENDPOINT: http://127.0.0.1:35357/v2.0
+        OS_SERVICE_TOKEN: ADMIN
+
+    - name: Grant Admin role
+      command: keystone user-role-add --user {{ADMIN_USER}} --tenant {{TENANT_NAME}} --role-id {{ADMIN_ROLE_NAME}}
+      environment:
+        OS_SERVICE_ENDPOINT: http://127.0.0.1:35357/v2.0
+        OS_SERVICE_TOKEN: ADMIN
+
+    - name: Populate service in service catalog
+      command: keystone service-create --name=keystone --type=identity --description="Keystone Identity Service"
+      environment:
+        OS_SERVICE_ENDPOINT: http://127.0.0.1:35357/v2.0
+        OS_SERVICE_TOKEN: ADMIN
+
+    - name: Populate endpoint in service catalog
+      command: keystone endpoint-create --region RegionOne --service keystone --publicurl=http://{{MY_PUBLIC_IP}}:5000/v2.0 --internalurl=http://{{MY_PRIVATE_IP}}:5000/v2.0 --adminurl=http://{{MY_PRIVATE_IP}}:35357/v2.0 
+      environment:
+        OS_SERVICE_ENDPOINT: http://127.0.0.1:35357/v2.0
+        OS_SERVICE_TOKEN: ADMIN
+
+    - name: Create credentials directory
+      file: path=~/credentials owner=root state=directory mode=0755
+
+    - name: Create user credentials
+      copy: src=credentials/user dest=~/credentials/user owner=root group=root mode=0644
+
+    - name: Create admin credentials
+      copy: src=credentials/admin dest=~/credentials/admin owner=root group=root mode=0644
+
+
+# Installing the Image Service
+
+    - name: Install Glance packages
+      apt: name=glance state=latest
+
+    - name: Stop Glance-registry service
+      service: name=glance-registry state=stopped enabled=yes
+
+    - name: Stop Glance-api service
+      service: name=glance-api state=stopped enabled=yes
+
+    - name: Remove SQLite default db
+      shell: rm -f /var/lib/glance/glance.sqlite
+    
+    - name: Create Glance DB
+      mysql_db: name=glance state=present
+
+    - name: Create Glance DB user/pass
+      mysql_user: name={{GLANCE_DBUSER}} password={{GLANCE_DBPASS}} priv=glance.*:ALL state=present
+
+    - name: Create Glance Service user
+      command: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} user-create --tenant {{SERVICE_TENANT_NAME}} --name {{GLANCE_USER}} --pass {{GLANCE_PASS}}
+
+    - name: Grant Admin role to Glance user
+      command: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} user-role-add --user {{GLANCE_USER}} --tenant {{SERVICE_TENANT_NAME}} --role-id {{ADMIN_ROLE_NAME}}
+
+    - name: Populate Glance service in service catalog
+      command: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} service-create --name=glance --type=image --description="Glance Image Service"
+
+    - name: Populate Glance endpoint in service catalog
+      command: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} endpoint-create --region RegionOne --service glance --publicurl=http://{{MY_PUBLIC_IP}}:9292/v1 --internalurl=http://{{MY_PRIVATE_IP}}:9292/v1 --adminurl=http://{{MY_PRIVATE_IP}}:9292/v1
+
+    - name: Configure Glance DB access (registry)
+      lineinfile: "dest=/etc/glance/glance-registry.conf regexp='^#connection'
+                   line='connection = mysql://{{GLANCE_DBUSER}}:{{GLANCE_DBPASS}}@{{MY_PRIVATE_IP}}/glance'"
+
+    - name: Set auth host (registry)
+      lineinfile: "dest=/etc/glance/glance-registry.conf regexp='^auth_host'
+                   line='auth_host = {{MY_PRIVATE_IP}}'"
+
+    - name: Set admin tenant name (registry)
+      lineinfile: "dest=/etc/glance/glance-registry.conf regexp='^admin_tenant_name'
+                   line='admin_tenant_name = Services'"
+
+    - name: Set Glance user (registry)
+      lineinfile: "dest=/etc/glance/glance-registry.conf regexp='^admin_user' 
+                   line='admin_user = {{GLANCE_USER}}'"
+
+    - name: Set Glance password (registry)
+      lineinfile: "dest=/etc/glance/glance-registry.conf regexp='^admin_password' 
+                   line='admin_password = {{GLANCE_PASS}}'"
+
+    - name: Set flavor (registry)
+      lineinfile: "dest=/etc/glance/glance-registry.conf regexp='^#flavor' 
+                   line='flavor = keystone'"
+
+    - name: Configure Glance DB access (api)
+      lineinfile: "dest=/etc/glance/glance-api.conf regexp='^#connection ='
+                   line='connection = mysql://{{GLANCE_DBUSER}}:{{GLANCE_DBPASS}}@{{MY_PRIVATE_IP}}/glance'"
+
+    - name: Set Glance auth host (api)
+      lineinfile: "dest=/etc/glance/glance-api.conf regexp='^auth_host'
+                   line='auth_host = {{MY_PRIVATE_IP}}'"
+
+    - name: Set Glance admin tenant name (api)
+      lineinfile: "dest=/etc/glance/glance-api.conf regexp='^admin_tenant_name'
+                   line='admin_tenant_name = Services'"
+
+    - name: Set Glance user (api)
+      lineinfile: "dest=/etc/glance/glance-api.conf regexp='^admin_user' 
+                   line='admin_user = {{GLANCE_USER}}'"
+
+    - name: Set Glance password (api)
+      lineinfile: "dest=/etc/glance/glance-api.conf regexp='^admin_password' 
+                   line='admin_password = {{GLANCE_PASS}}'"
+
+    - name: Set flavor (api)
+      lineinfile: "dest=/etc/glance/glance-api.conf regexp='^#flavor' 
+                   line='flavor = keystone'"
+
+    - name: Set Glance password (api)
+      lineinfile: "dest=/etc/glance/glance-api.conf regexp='^#show_image_direct_url' 
+                   line='show_image_direct_url = True'"
+
+    - name: Set Glance rabbit host (api)
+      lineinfile: "dest=/etc/glance/glance-api.conf regexp='^rabbit_host'
+                   line='rabbit_host = {{MY_PRIVATE_IP}}'"
+
+    - name: Set rabbit password on api config
+      lineinfile: "dest=/etc/glance/glance-api.conf regexp='^rabbit_password'
+                   line='rabbit_password = {{RABBIT_PASS}}'"
+
+    - name: Initialize Glance database
+      command: glance-manage db_sync
+
+    - name: Start Glance-registry service
+      service: name=glance-registry state=started enabled=yes
+
+    - name: Start Glance-api service
+      service: name=glance-api state=started enabled=yes
+
+    - name: Create images directory
+      file: path=~/images owner=root state=directory mode=0755
+
+    - name: Download Test Image
+      command: wget http://cdn.download.cirros-cloud.net/0.3.2/cirros-0.3.2-x86_64-disk.img -O ~/images/cirros-0.3.2-x86_64-disk.qcow2
+
+    - name: Register a qcow2 image
+      command: glance --os-tenant-name {{TENANT_NAME}} --os-username {{MEMBER_USER}} --os-password {{MEMBER_PASS}} --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} image-create --name "cirros-qcow2" --disk-format qcow2 --container-format bare --is-public True --file ~/images/cirros-0.3.2-x86_64-disk.qcow2
+
+
+# Installing the Neutron Service
+
+    - name: Install openvswitch packages
+      apt: name=openvswitch-switch state=installed
+
+    - name: Restart Open vSwitch service
+      service: name=openvswitch-switch state=restarted enabled=yes
+
+    - name: Install Neutron packages
+      action: apt pkg={{item}} state=installed
+      with_items:
+        - neutron-server 
+        - neutron-plugin-ml2 
+        - neutron-plugin-openvswitch-agent
+        - neutron-dhcp-agent
+        - neutron-l3-agent
+        - neutron-metadata-agent
+
+
+# Internal bridge created by default during the installation
+    - name: Create Open vSwitch integration external bridge
+      command: ovs-vsctl add-br br-ext
+
+# Configuring bridge
+    - name: Replacing current interface with a bridge
+      replace: dest=/etc/network/interfaces regexp='{{EXT_INTERFACE}}' replace='br-ext'
+
+    - name: Adding auto parameter on current interface
+      lineinfile: dest=/etc/network/interfaces insertbefore='^auto br-ext' line='auto {{EXT_INTERFACE}}'
+    
+    - name: Adding manual flag on current interface
+      lineinfile: dest=/etc/network/interfaces insertbefore='^auto br-ext' line='iface {{EXT_INTERFACE}} inet manual'
+    
+    - name: Adding ovs type on physical interface
+      lineinfile: dest=/etc/network/interfaces insertbefore="^auto br-ext" line='\tovs_type OVSPort'
+
+    - name: Adding ovs bridge on physical interface
+      lineinfile: dest=/etc/network/interfaces insertbefore="^auto br-ext" line='\tovs_bridge br-ext'
+
+    - name: Adding link up parameter on current interface
+      lineinfile: dest=/etc/network/interfaces insertbefore="^auto br-ext" line='\tup ifconfig $IFACE 0.0.0.0 up'
+
+    - name: Adding promisc mode parameter on current interface
+      lineinfile: dest=/etc/network/interfaces insertbefore="^auto br-ext" line='\tup ip link set $IFACE promisc on'
+
+    - name: Adding link down parameter on current interface
+      lineinfile: dest=/etc/network/interfaces insertbefore="^auto br-ext" line='\tdown ifconfig $IFACE down\n'
+
+    - name: Adding ovs bridge on bridge interface
+      lineinfile: dest=/etc/network/interfaces insertafter="^iface br-ext inet static" line='    ovs_bridge br-ext'
+
+    - name: Adding ovs type on bridge interface
+      lineinfile: dest=/etc/network/interfaces insertafter="^iface br-ext inet static" line='    ovs_type OVSBridge'
+
+    - name: Network restart
+      shell: ifdown br-ext ; ifdown {{EXT_INTERFACE}} ; ifup {{EXT_INTERFACE}} ; ifup br-ext
+      
+
+# Continue with Neutron configuration
+
+    - name: Stop Neutron services
+      service: name={{item}} state=stopped enabled=yes
+      with_items:
+        - neutron-plugin-openvswitch-agent
+        - neutron-dhcp-agent
+        - neutron-l3-agent
+        - neutron-metadata-agent
+        - neutron-server
+
+    - name: Remove SQLite default db
+      shell: rm -f /var/lib/neutron/neutron.sqlite
+    
+    - name: Create Neutron DB
+      mysql_db: name=neutron state=present
+
+    - name: Create Neutron DB user/pass
+      mysql_user: name={{NEUTRON_DBUSER}} password={{NEUTRON_DBPASS}} priv=neutron.*:ALL state=present
+
+    - name: Create Neutron Service user
+      command: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} user-create --tenant {{SERVICE_TENANT_NAME}} --name {{NEUTRON_USER}} --pass {{NEUTRON_PASS}}
+
+    - name: Grant Admin role to Neutron user
+      command: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} user-role-add --user {{NEUTRON_USER}} --tenant {{SERVICE_TENANT_NAME}} --role-id {{ADMIN_ROLE_NAME}}
+
+    - name: Populate Neutron service in service catalog
+      command: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} service-create --name=neutron --type=network --description="Neutron Network Service"
+
+    - name: Populate Neutron endpoint in service catalog
+      command: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} endpoint-create --region RegionOne --service neutron --publicurl="http://{{MY_PUBLIC_IP}}:9696" --internalurl="http://{{MY_PRIVATE_IP}}:9696" --adminurl="http://{{MY_PRIVATE_IP}}:9696"
+
+    - name: Configure Neutron DB access 
+      lineinfile: "dest=/etc/neutron/neutron.conf regexp='^connection = sqlite'
+                   line='connection = mysql://{{NEUTRON_DBUSER}}:{{NEUTRON_DBPASS}}@{{MY_PRIVATE_IP}}/neutron'"
+
+    - name: Set Neutron rabbit host
+      lineinfile: "dest=/etc/neutron/neutron.conf regexp='^# rabbit_host'
+                   line='rabbit_host = {{MY_PRIVATE_IP}}'"
+
+    - name: Set Neutron rabbit password
+      lineinfile: "dest=/etc/neutron/neutron.conf regexp='^# rabbit_password'
+                   line='rabbit_password = {{RABBIT_PASS}}'"
+
+    - name: Set auth host
+      lineinfile: "dest=/etc/neutron/neutron.conf regexp='^auth_host'
+                   line='auth_host = {{MY_PRIVATE_IP}}'"
+
+    - name: Set auth strategy
+      lineinfile: "dest=/etc/neutron/neutron.conf regexp='^# auth_strategy' 
+                   line='auth_strategy = keystone'"
+
+    - name: Set admin tenant name 
+      lineinfile: "dest=/etc/neutron/neutron.conf regexp='^admin_tenant_name'
+                   line='admin_tenant_name = {{SERVICE_TENANT_NAME}}'"
+
+    - name: Set Neutron user 
+      lineinfile: "dest=/etc/neutron/neutron.conf regexp='^admin_user' 
+                   line='admin_user = {{NEUTRON_USER}}'"
+
+    - name: Set Neutron password
+      lineinfile: "dest=/etc/neutron/neutron.conf regexp='^admin_password' 
+                   line='admin_password = {{NEUTRON_PASS}}'"
+
+    - name: Enable IP Overlapping
+      lineinfile: "dest=/etc/neutron/neutron.conf regexp='^# allow_overlapping_ips = False'
+                   line='allow_overlapping_ips = True'"
+
+    - name: Set ml2 plugin
+      lineinfile: "dest=/etc/neutron/neutron.conf regexp='^core_plugin' 
+                   line='core_plugin = ml2'"
+
+    - name: Set router service pluglin
+      lineinfile: "dest=/etc/neutron/neutron.conf regexp='^# service_plugins'
+                   line='service_plugins = router'"
+
+    - name: Enable port status changes
+      lineinfile: "dest=/etc/neutron/neutron.conf regexp='^# notify_nova_on_port_status_changes'
+                   line='notify_nova_on_port_status_changes = True'"
+
+    - name: Enable port data changes
+      lineinfile: "dest=/etc/neutron/neutron.conf regexp='^# notify_nova_on_port_data_changes' 
+                   line='notify_nova_on_port_data_changes = True'"
+
+    - name: Set Nova URL
+      lineinfile: "dest=/etc/neutron/neutron.conf regexp='^# nova_url' 
+                   line='nova_url = http://{{MY_PRIVATE_IP}}:8774/v2'"
+
+    - name: Set Nova admin user
+      lineinfile: "dest=/etc/neutron/neutron.conf regexp='^# nova_admin_username' 
+                   line='nova_admin_username = {{NOVA_USER}}'"
+
+    - name: Set Nova admin password
+      lineinfile: "dest=/etc/neutron/neutron.conf regexp='^# nova_admin_password' 
+                   line='nova_admin_password = {{NOVA_PASS}}'"
+
+# for some reason if we ise the tenant name instead neutron spawns and dies
+    - name: Get Nova admin tenant ID
+      shell: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} tenant-get Services | awk '/ id / { print $4 }'
+      register: tenantID
+
+    - name: Set Nova admin tenant ID on the config
+      lineinfile: "dest=/etc/neutron/neutron.conf regexp='^# nova_admin_tenant_id' 
+                   line='nova_admin_tenant_id = {{tenantID.stdout}}'"
+
+    - name: Set Nova admin auth URL
+      lineinfile: "dest=/etc/neutron/neutron.conf regexp='^# nova_admin_auth_url' 
+                   line='nova_admin_auth_url = http://{{MY_PRIVATE_IP}}:35357/v2.0'"
+
+    - name: ML2 Set driver types
+      lineinfile: "dest=/etc/neutron/plugins/ml2/ml2_conf.ini regexp='^# type_drivers'
+                   line='type_drivers = gre'"
+
+    - name: ML2 Set network types
+      lineinfile: "dest=/etc/neutron/plugins/ml2/ml2_conf.ini regexp='^# tenant_network_types'
+                   line='tenant_network_types = gre'"
+
+    - name: ML2 Set driver mechanisms
+      lineinfile: "dest=/etc/neutron/plugins/ml2/ml2_conf.ini regexp='^# mechanism_drivers'
+                   line='mechanism_drivers = openvswitch'"
+
+    - name: ML2 Set tunnel range id
+      lineinfile: "dest=/etc/neutron/plugins/ml2/ml2_conf.ini regexp='^# tunnel_id_ranges'
+                   line='tunnel_id_ranges = 1:1000'"
+
+    - name: ML2 Set firewall driver
+      lineinfile: dest=/etc/neutron/plugins/ml2/ml2_conf.ini insertafter='^\[securitygroup\]'
+                  line='firewall_driver = neutron.agent.linux.iptables_firewall.OVSHybridIptablesFirewallDriver'
+
+    - name: ML2 Enable security group
+      lineinfile: "dest=/etc/neutron/plugins/ml2/ml2_conf.ini regexp='^# enable_security_group'
+                   line='enable_security_group = True'"
+
+    - name: ML2 Add ovs section
+      lineinfile: dest=/etc/neutron/plugins/ml2/ml2_conf.ini
+                  line='[ovs]'
+
+    - name: ML2 Set local IP
+      lineinfile: dest=/etc/neutron/plugins/ml2/ml2_conf.ini insertafter='^\[ovs\]'
+                  line='local_ip = {{MY_PRIVATE_IP}}'
+
+    - name: ML2 Set Tunnel type
+      lineinfile: dest=/etc/neutron/plugins/ml2/ml2_conf.ini insertafter='^\[ovs\]'
+                  line='tunnel_type = gre'
+
+    - name: ML2 Enabling Tunneling
+      lineinfile: dest=/etc/neutron/plugins/ml2/ml2_conf.ini insertafter='^\[ovs\]'
+                  line='enable_tunneling = True'
+
+    - name: Set DHCP Interface agent
+      lineinfile: dest=/etc/neutron/dhcp_agent.ini regexp='^# interface_driver = neutron.agent.linux.interface.OVSInterfaceDriver'
+                  line='interface_driver = neutron.agent.linux.interface.OVSInterfaceDriver'
+
+    - name: Set DHCP driver
+      lineinfile: dest=/etc/neutron/dhcp_agent.ini regexp='^# dhcp_driver = neutron.agent.linux.dhcp.Dnsmasq'
+                  line='dhcp_driver = neutron.agent.linux.dhcp.Dnsmasq'
+
+    - name: DHCP enable use spaces
+      lineinfile: dest=/etc/neutron/dhcp_agent.ini regexp='^# use_namespaces = True'
+                  line='use_namespaces = True'
+
+    - name: DHCP enable isolated metadata
+      lineinfile: dest=/etc/neutron/dhcp_agent.ini regexp='^# enable_isolated_metadata'
+                  line='enable_isolated_metadata = True'
+
+    - name: DHCP enable metadata network
+      lineinfile: dest=/etc/neutron/dhcp_agent.ini regexp='^# enable_metadata_network'
+                  line='enable_metadata_network = True'
+
+    - name: Set L3 Interface agent
+      lineinfile: dest=/etc/neutron/l3_agent.ini regexp='^# interface_driver = neutron.agent.linux.interface.OVSInterfaceDriver'
+                  line='interface_driver = neutron.agent.linux.interface.OVSInterfaceDriver'
+
+    - name: Enable L3 use namespaces
+      lineinfile: dest=/etc/neutron/l3_agent.ini regexp='^# use_namespaces'
+                  line='use_namespaces = True'
+
+    - name: Set L3 dhcp driver
+      lineinfile: dest=/etc/neutron/l3_agent.ini regexp='^# dhcp_driver'
+                  line='dhcp_driver = neutron.agent.linux.dhcp.Dnsmasq'
+
+    - name: Set Metadata agent nova IP
+      lineinfile: dest=/etc/neutron/metadata_agent.ini regexp='^# nova_metadata_ip'
+                  line='nova_metadata_ip = {{MY_PRIVATE_IP}}'
+
+    - name: Set Metadata agent nova port 
+      lineinfile: dest=/etc/neutron/metadata_agent.ini regexp='^# nova_metadata_port'
+                  line='nova_metadata_port = 8775'
+
+    - name: Set Metadata agent proxy shared secret
+      lineinfile: dest=/etc/neutron/metadata_agent.ini regexp='^# metadata_proxy_shared_secret'
+                  line='metadata_proxy_shared_secret = openstack'
+
+    - name: Set Metadata agent auth URL
+      lineinfile: "dest=/etc/neutron/metadata_agent.ini regexp='^# auth_url'
+                  line='auth_url = http://{{MY_PRIVATE_IP}}:5000/v2.0'"
+
+    - name: Metadata admin tenanat name
+      lineinfile: dest=/etc/neutron/metadata_agent.ini regexp='^admin_tenant_name'
+                  line='admin_tenant_name = {{SERVICE_TENANT_NAME}}'
+
+    - name: Metadata admin user
+      lineinfile: dest=/etc/neutron/metadata_agent.ini regexp='^admin_user'
+                  line='admin_user = {{NEUTRON_USER}}'
+
+    - name: Metadata admin password
+      lineinfile: dest=/etc/neutron/metadata_agent.ini regexp='^admin_password'
+                  line='admin_password = {{NEUTRON_PASS}}'
+
+    - name: Start Neutron service
+      service: name=neutron-server state=started
+
+    - name: Wait for neutron-server to automatically run DB sync
+      pause: seconds=15
+
+    - name: Start Neutron services
+      service: name={{item}} state=started
+      with_items:
+        - neutron-plugin-openvswitch-agent
+        - neutron-dhcp-agent
+        - neutron-l3-agent
+        - neutron-metadata-agent
+
+    - name: Create a private network as a non admin user
+      command: neutron --os-tenant-name {{TENANT_NAME}} --os-username {{MEMBER_USER}} --os-password {{MEMBER_PASS}} --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} net-create internal
+
+    - name: Create a private subnet as a non admin user
+      command: neutron --os-tenant-name {{TENANT_NAME}} --os-username {{MEMBER_USER}} --os-password {{MEMBER_PASS}} --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} subnet-create --name privatenet internal {{PRIV_SUBNET}}
+
+
+# Installing the Nova Service
+
+    - name: Install Nova packages
+      action: apt pkg={{item}} state=installed
+      with_items:
+        - nova-api 
+        - nova-scheduler 
+        - nova-conductor
+        - nova-cert
+        - nova-consoleauth
+        - nova-novncproxy
+        - nova-compute
+
+    - name: Stop Nova services
+      service: name={{item}} state=stopped enabled=yes
+      with_items:
+        - nova-api
+        - nova-scheduler
+        - nova-conductor
+        - nova-cert
+        - nova-consoleauth
+        - nova-novncproxy
+        - nova-compute
+
+    - name: Remove SQLite default db
+      shell: rm -f /var/lib/nova/nova.sqlite
+
+# For KVM support uncomment these lines 
+#    - name: Ensure KVM kernel Module is loaded
+#      lineinfile: dest=/etc/modules
+#                  line='kvm'
+
+# This could be intel or amd depending on your system
+#    - name: Ensure KVM amd kernel Module is loaded
+#      lineinfile: dest=/etc/modules
+#                  line='kvm-intel'
+
+    - name: Create Nova DB
+      mysql_db: name=nova state=present
+
+    - name: Create Nova DB user/pass
+      mysql_user: name={{NOVA_DBUSER}} password={{NOVA_DBPASS}} priv=nova.*:ALL state=present
+
+    - name: Create Nova Service user
+      command: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} user-create --tenant {{SERVICE_TENANT_NAME}} --name {{NOVA_USER}} --pass {{NOVA_PASS}}
+
+    - name: Grant Admin role to Nova user
+      command: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} user-role-add --user {{NOVA_USER}} --tenant {{SERVICE_TENANT_NAME}} --role-id {{ADMIN_ROLE_NAME}}
+
+    - name: Populate Nova service in service catalog
+      command: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} service-create --name=nova --type=compute --description="Nova Compute Service"
+
+    - name: Populate Nova endpoint in service catalog
+      command: keystone --os-tenant-name {{TENANT_NAME}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} endpoint-create --region RegionOne --service nova --publicurl="http://{{MY_PUBLIC_IP}}:8774/v2/%(tenant_id)s" --internalurl="http://{{MY_PRIVATE_IP}}:8774/v2/%(tenant_id)s" --adminurl="http://{{MY_PRIVATE_IP}}:8774/v2/%(tenant_id)s"
+
+    - name: Set Api class
+      lineinfile: dest=/etc/nova/nova.conf
+                  line='network_api_class=nova.network.neutronv2.api.API'
+
+    - name: Set auth strategy
+      lineinfile: dest=/etc/nova/nova.conf
+                  line='auth_strategy = keystone'
+
+    - name: Set Neutron URL
+      lineinfile: "dest=/etc/nova/nova.conf
+                   line='neutron_url = http://{{MY_PRIVATE_IP}}:9696'"
+
+    - name: Set Neutron admin tenant name on the config
+      lineinfile: dest=/etc/nova/nova.conf
+                  line='neutron_admin_tenant_name = {{SERVICE_TENANT_NAME}}'
+
+    - name: Set Neutron admin user
+      lineinfile: dest=/etc/nova/nova.conf
+                  line='neutron_admin_username = {{NEUTRON_USER}}'
+
+    - name: Set Neutron admin password
+      lineinfile: dest=/etc/nova/nova.conf
+                  line='neutron_admin_password = {{NEUTRON_PASS}}'
+
+    - name: Set Neutron admin auth URL
+      lineinfile: "dest=/etc/nova/nova.conf
+                  line='neutron_admin_auth_url = http://{{MY_PRIVATE_IP}}:35357/v2.0'"
+    
+    - name: Set Firewall driver
+      lineinfile: dest=/etc/nova/nova.conf
+                  line='firewall_driver = nova.virt.firewall.NoopFirewallDriver'
+
+    - name: Set security group API
+      lineinfile: dest=/etc/nova/nova.conf
+                  line='security_group_api = neutron'
+
+    - name: Set interface driver
+      lineinfile: dest=/etc/nova/nova.conf
+                  line='linuxnet_interface_driver = nova.network.linux_net.LinuxOVSInterfaceDriver'
+
+    - name: Set Nova rabbit host
+      lineinfile: dest=/etc/nova/nova.conf
+                  line='rabbit_host = {{MY_PRIVATE_IP}}'
+
+    - name: Set Nova rabbit password
+      lineinfile: dest=/etc/nova/nova.conf
+                  line='rabbit_password = {{RABBIT_PASS}}'
+
+    - name: Set Nova glance host
+      lineinfile: dest=/etc/nova/nova.conf
+                  line='glance_host = {{MY_PRIVATE_IP}}'
+
+    - name: Set force config drive
+      lineinfile: dest=/etc/nova/nova.conf
+                  line='force_config_drive = always'
+
+    - name: Set Nova my IP
+      lineinfile: dest=/etc/nova/nova.conf
+                  line='my_ip = {{MY_PRIVATE_IP}}'
+
+    - name: Enable fixed IP disassociation
+      lineinfile: dest=/etc/nova/nova.conf
+                  line='fixed_ip_disassociate_timeout = 30'
+
+    - name: Enable instance password
+      lineinfile: dest=/etc/nova/nova.conf
+                  line='enable_instance_password = False'
+
+    - name: Enable neutron metadata proxy
+      lineinfile: dest=/etc/nova/nova.conf
+                  line='service_neutron_metadata_proxy = True'
+
+    - name: Set Metadata agent proxy shared secret
+      lineinfile: dest=/etc/nova/nova.conf
+                  line='neutron_metadata_proxy_shared_secret = openstack'
+
+    - name: Set VNC proxy URL
+      lineinfile: "dest=/etc/nova/nova.conf
+                  line='novncproxy_base_url = http://{{MY_PUBLIC_IP}}:6080/vnc_auto.html'"
+
+    - name: Set VNC Proxy address
+      lineinfile: dest=/etc/nova/nova.conf
+                  line='vncserver_proxyclient_address = {{MY_PUBLIC_IP}}'
+
+    - name: Set VNC listen IP
+      lineinfile: dest=/etc/nova/nova.conf
+                  line='vncserver_listen = 0.0.0.0'
+
+    - name: Set database section
+      lineinfile: dest=/etc/nova/nova.conf
+                  line='[database]'
+
+    - name: Configure Nova DB access 
+      lineinfile: "dest=/etc/nova/nova.conf
+                   line='connection = mysql://{{NOVA_DBUSER}}:{{NOVA_DBPASS}}@{{MY_PRIVATE_IP}}/nova'"
+
+    - name: Set keysotne authtoken section
+      lineinfile: dest=/etc/nova/nova.conf
+                  line='[keystone_authtoken]'
+
+    - name: Set auth URI
+      lineinfile: "dest=/etc/nova/nova.conf
+                   line='auth_uri = http://{{MY_PRIVATE_IP}}:5000'"
+
+    - name: Set auth host
+      lineinfile: dest=/etc/nova/nova.conf
+                  line='auth_host = {{MY_PRIVATE_IP}}'
+
+    - name: Set auth port
+      lineinfile: dest=/etc/nova/nova.conf
+                  line='auth_port = 35357'
+
+    - name: Set auth protocol
+      lineinfile: dest=/etc/nova/nova.conf
+                  line='auth_protocol = http'
+
+    - name: Set admin tenant name 
+      lineinfile: dest=/etc/nova/nova.conf
+                  line='admin_tenant_name = {{SERVICE_TENANT_NAME}}'
+
+    - name: Set Nova user 
+      lineinfile: dest=/etc/nova/nova.conf
+                  line='admin_user = {{NOVA_USER}}'
+
+    - name: Set Nova password
+      lineinfile: dest=/etc/nova/nova.conf
+                  line='admin_password = {{NOVA_PASS}}'
+
+    - name: Initialize Nova database
+      command: nova-manage db sync
+
+    - name: Start Nova services
+      service: name={{item}} state=started
+      with_items:
+        - nova-api
+        - nova-scheduler
+        - nova-conductor
+        - nova-cert
+        - nova-consoleauth
+        - nova-novncproxy
+        - nova-compute
+
