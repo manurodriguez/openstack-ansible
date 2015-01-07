@@ -6,8 +6,10 @@ Deployment of a replica using Ansible
 
 Instrucctions
 
+- Create three Openstack instances for mongo (see main readme)
 
-- Add mongo hosts on intentory file
+
+- Add mongo instances on intentory file
 
 	File: /etc/ansible/hosts
 
@@ -20,7 +22,7 @@ Instrucctions
 	 IP_mongo3
 
 
-- Create user on mongo servers with sudo privileges
+- Create user on mongo instances with sudo privileges
 
 	$ useradd user
 
@@ -29,7 +31,7 @@ Instrucctions
 	  user        ALL=(ALL)       NOPASSWD: ALL
 
 
-- Upload public ssh on mongo servers
+- Upload public ssh on mongo instances
 
 	$ ssh-copy-id -i .ssh/public.key user@IP_mongo[1-3]
 
