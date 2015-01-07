@@ -45,6 +45,8 @@ Instrucctions
 
 	$ ansible-playbook openstack-[stg|prod]/allinone.yml -u user --sudo
 
+Note: If using openstack-prod, we use a personalized image for glance: centos-6.6-x86_64-disk.qcow2, then change the proper references with your image name.
+
 
 - If you are running this on a cloud server apply this fix :P
 
