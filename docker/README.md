@@ -44,12 +44,12 @@ Instrucctions
 
 - Login to docker instance and download the image to run containers
 
-	# docker pull manudocker/apache-php
+	[root@docker ~]# docker pull manudocker/apache-php
 
 
 - Start the container
 
-	# docker run -d -p 80:80 manudocker/apache-php /usr/sbin/apache2ctl -D FOREGROUND 
+	[root@docker ~]# docker run -d -p 80:80 manudocker/apache-php /usr/sbin/apache2ctl -D FOREGROUND 
 
 
 - Verification from external server
