@@ -10,58 +10,57 @@ Instrucctions
 
 - Install ansible on your client machine:
 
-http://docs.ansible.com/intro_installation.html
+	http://docs.ansible.com/intro_installation.html
  
 
 - Create hosts intentory for ansible
 
-File: /etc/ansible/hosts
+	File: /etc/ansible/hosts
 
- [my-openstack-server]
+	 [my-openstack-server]
  
- IP_server
+	 IP_server
 
 
 - Create user on Openstack server with sudo privileges
 
-$ useradd user
+	$ useradd user
 
-$ visudo
+	$ visudo
 
-  user        ALL=(ALL)       NOPASSWD: ALL
+	  user        ALL=(ALL)       NOPASSWD: ALL
 
 
 - Upload public ssh on Openstack server
 
-$ ssh-copy-id -i .ssh/public.key user@IP_server
+	$ ssh-copy-id -i .ssh/public.key user@IP_server
 
 
 - Basic test, almost ready to start
 
-$ ansible all -m ping -u user
+	$ ansible all -m ping -u user
 
 
-- Run Playbook 
+- Run Playbook, either from stg or prod directory
 
-$ ansible-playbook allinone.yml -u user --sudo
+	$ ansible-playbook openstack-[stg|prod]/allinone.yml -u user --sudo
 
 
 - If you are running this on a cloud server apply this fix :P
 
-$ ansible-playbook cloud-libvirt-fix.yml -u user --sudo
+	$ ansible-playbook openstack-[stg|prod]/cloud-libvirt-fix.yml -u user --sudo
 
 
 - Create instance and apply security rules
 
-$ ansible-playbook create-instance.yml -u user --sudo
+	$ ansible-playbook openstack-[stg|prod]/create-instance.yml -u user --sudo
 
 
-- Verify your instance is running and login:
+- Verify your instance is running:
 
-$ source credentials/admin
+	$ source credentials/admin
 
-$ nova console-log MyFirstInstance
+	$ nova console-log MyFirstInstance
 
-$ nova list
+	$ nova list
 
-$ ssh user@$IP_INSTANCE
