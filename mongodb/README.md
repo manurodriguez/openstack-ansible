@@ -14,7 +14,9 @@ Instrucctions
 	 [mongo-repl]
  
 	 IP_mongo1
+
 	 IP_mongo2
+
 	 IP_mongo3
 
 
@@ -45,14 +47,18 @@ Instrucctions
 - Login to one node and start the replica
 
 	[root@mongo1 ~]# mongo 
+
 	> rs.initiate() 
+
 	myrepl:PRIMARY> rs.conf() 
 
 
 - Add nodes to the replica
 
 	myrepl:PRIMARY> rs.add("mongo2") 
+
 	myrepl:PRIMARY> rs.add("mongo3") 
+
 	myrepl:PRIMARY> rs.conf() 
 
 
