@@ -790,6 +790,12 @@
         - nova-novncproxy
         - nova-compute
 
+    - name: Adding pub key to loggin to instances
+      command: nova --os-tenant-name {{TENANT_NAME}} --os-username {{MEMBER_USER}} --os-password {{MEMBER_PASS}} --os-auth-url {{AUTH_URL}} --os-region-name {{REGION_NAME}} keypair-add --pub_key /home/benutzer/.ssh/authorized_keys MyKey
+
+
+# Installing GUI Horizon
+
     - name: Install Horizon Dashboard
       action: apt pkg={{item}} state=installed
       with_items:
