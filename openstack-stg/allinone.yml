@@ -186,10 +186,10 @@
       file: path=~/credentials owner=root state=directory mode=0755
 
     - name: Create user credentials
-      copy: src=credentials/user dest=~/credentials/user owner=root group=root mode=0644
+      copy: src=credentials/user dest=/root/credentials/user owner=root group=root mode=0644
 
     - name: Create admin credentials
-      copy: src=credentials/admin dest=~/credentials/admin owner=root group=root mode=0644
+      copy: src=credentials/admin dest=/root/credentials/admin owner=root group=root mode=0644
 
 
 # Installing the Image Service
@@ -788,3 +788,22 @@
         - nova-novncproxy
         - nova-compute
 
+
+# Installing GUI HOrizon
+
+    - name: Install Horizon Dashboard
+      action: apt pkg={{item}} state=installed
+      with_items:
+        - apache2
+        - memcached
+        - libapache2-mod-wsgi
+        - openstack-dashboard
+
+    - name: Remove Ubuntu theme
+      apt: name=openstack-dashboard-ubuntu-theme state=absent purge=yes force=yes
+
+    - name: Making sure apache and memcached are enabled and running
+      service: name={{item}} state=started enabled=yes
+      with_items: 
+        - apache2
+        - memcached
