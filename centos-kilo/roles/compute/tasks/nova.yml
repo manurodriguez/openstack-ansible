@@ -1,0 +1,17 @@
+- name: Installing the Nova packages
+  action: yum pkg={{item}} state=installed
+  with_items:
+      - openstack-nova-compute 
+      - sysfsutils
+
+- name: Adding the nova settings
+  template: src=nova.conf.j2 dest=/etc/nova/nova.conf
+
+- name: Populate the compute service database
+  shell: su -s /bin/sh -c "nova-manage db_sync" nova
+
+- name: Start the Compute and libvirtd services and enable them when the system boots
+  service: name={{item}} state=started enabled=yes
+  with_items:
+      - libvirtd.service
+      - openstack-nova-compute.service

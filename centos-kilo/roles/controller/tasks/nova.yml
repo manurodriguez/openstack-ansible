@@ -1,0 +1,45 @@
+- name: Create Nova DB
+  mysql_db: name=nova state=present
+
+- name: Create Nova DB user/pass
+  mysql_user: name={{ NOVA_DBUSER }} password={{ NOVA_DBPASS }} priv=nova.*:ALL state=present
+
+# There is bug on v3 api call, then I'm using the this flags to authenticate instead of the ones in admin-openrc.sh
+- name: Create nova user
+  command: openstack --os-auth-url http://{{MY_PRIVATE_IP}}:35357/v2.0 --os-tenant-name {{ADMIN_PROJECT}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} user create --password {{NOVA_PASS}} {{NOVA_USER}} 
+
+- name: Add nova user into admin role
+  command: openstack --os-auth-url http://{{MY_PRIVATE_IP}}:35357/v2.0 --os-tenant-name {{ADMIN_PROJECT}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} role add --project {{SERVICE_PROJECT}} --user {{NOVA_USER}} {{ADMIN_ROLE_NAME}} 
+
+- name: Create the nova service entity
+  command: openstack --os-auth-url http://{{MY_PRIVATE_IP}}:35357/v2.0  --os-tenant-name {{ADMIN_PROJECT}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} service create --name nova --description "Openstack Compute" compute
+
+- name: Create the Compute service API endpoints
+  command: openstack --os-auth-url http://{{MY_PRIVATE_IP}}:35357/v2.0  --os-tenant-name {{ADMIN_PROJECT}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} endpoint create --publicurl http://{{MY_PUBLIC_IP}}:8774/v2/%\(tenant_id\)s --internalurl http://{{MY_PRIVATE_IP}}:8774/v2/%\(tenant_id\)s --adminurl http://{{MY_PRIVATE_IP}}:8774/v2/%\(tenant_id\)s --region {{REGION_NAME}} compute
+
+- name: Installing Nova and dependencies
+  action: yum pkg={{item}} state=installed
+  with_items:
+      - openstack-nova-api 
+      - openstack-nova-cert 
+      - openstack-nova-conductor
+      - openstack-nova-console 
+      - openstack-nova-novncproxy
+      - openstack-nova-scheduler
+      - python-novaclient
+
+- name: Adding the nova settings
+  template: src=nova.conf.j2 dest=/etc/nova/nova.conf
+
+- name: Populate the compute service database
+  shell: su -s /bin/sh -c "nova-manage db_sync" nova
+
+- name: Start the Compute services and enable them when the system boots
+  service: name={{item}} state=started enabled=yes
+  with_items:
+      - openstack-nova-api.service
+      - openstack-nova-cert.service
+      - openstack-nova-consoleauth.service
+      - openstack-nova-scheduler.service
+      - openstack-nova-conductor.service
+      - openstack-nova-novncproxy.service

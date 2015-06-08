@@ -1,0 +1,41 @@
+- name: Create Glance DB
+  mysql_db: name=glance state=present
+
+- name: Create Glance DB user/pass
+  mysql_user: name={{ GLANCE_DBUSER }} password={{ GLANCE_DBPASS }} priv=glance.*:ALL state=present
+
+# There is bug on v3 api call, then I'm using the this flags to authenticate instead of the ones in admin-openrc.sh
+- name: Create glance user
+  command: openstack --os-auth-url http://{{MY_PRIVATE_IP}}:35357/v2.0 --os-tenant-name {{ADMIN_PROJECT}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} user create --password {{GLANCE_PASS}} {{GLANCE_USER}} 
+
+- name: Add glance user into admin role
+  command: openstack --os-auth-url http://{{MY_PRIVATE_IP}}:35357/v2.0 --os-tenant-name {{ADMIN_PROJECT}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} role add --project {{SERVICE_PROJECT}} --user {{GLANCE_USER}} {{ADMIN_ROLE_NAME}} 
+
+- name: Create the glance service entity
+  command: openstack --os-auth-url http://{{MY_PRIVATE_IP}}:35357/v2.0  --os-tenant-name {{ADMIN_PROJECT}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} service create --name glance --description "Openstack Image Service" image
+
+- name: Create the Image service API endpoints
+  command: openstack --os-auth-url http://{{MY_PRIVATE_IP}}:35357/v2.0  --os-tenant-name {{ADMIN_PROJECT}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} endpoint create --publicurl http://{{MY_PUBLIC_IP}}:9292 --internalurl http://{{MY_PRIVATE_IP}}:9292 --adminurl http://{{MY_PRIVATE_IP}}:9292 --region {{REGION_NAME}} image
+
+- name: Installing Glance and dependencies
+  action: yum pkg={{item}} state=installed
+  with_items:
+      - openstack-glance 
+      - python-glance 
+      - python-glanceclient
+
+- name: Adding the glance-api settings
+  template: src=glance-api.conf.j2 dest=/etc/glance/glance-api.conf
+
+- name: Adding the glance-registry settings
+  template: src=glance-registry.conf.j2 dest=/etc/glance/glance-registry.conf
+
+- name: Populate the image service database
+  shell: su -s /bin/sh -c "glance-manage db_sync" glance
+
+- name: Start the Image services and enable it when the system boots
+  service: name={{item}} state=started enabled=yes
+  with_items:
+      - openstack-glance-api.service
+      - openstack-glance-registry.service
+

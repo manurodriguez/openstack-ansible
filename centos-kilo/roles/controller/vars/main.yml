@@ -1,0 +1,15 @@
+KEYSTONE_DBUSER: dbkeystoneu
+KEYSTONE_DBPASS: dbkeystonepw
+ADMIN_TOKEN: ADMIN
+ADMIN_PROJECT: admin
+DEMO_PROJECT: demo
+DEMO_USER: user
+DEMO_PASS: upassword
+ADMIN_USER: admin
+ADMIN_PASS: apassword
+ADMIN_ROLE_NAME: admin
+DEMO_ROLE_NAME: user
+GLANCE_DBUSER: dbglanceu
+GLANCE_DBPASS: dbglancepw
+GLANCE_USER: glance
+GLANCE_PASS: glancepw

@@ -1,0 +1,22 @@
+[DEFAULT]
+notification_driver = noop
+
+[database]
+connection = mysql://{{GLANCE_DBUSER}}:{{GLANCE_DBPASS}}@localhost/glance
+
+[keystone_authtoken]
+auth_uri = http://{{MY_PRIVATE_IP}}:5000
+auth_url = http://{{MY_PRIVATE_IP}}:35357
+auth_plugin = password
+project_domain_id = default
+user_domain_id = default
+project_name = {{SERVICE_PROJECT}}
+username = {{GLANCE_USER}}
+password = {{GLANCE_PASS}}
+ 
+[paste_deploy]
+flavor = keystone
+
+[glance_store]
+default_store = file
+filesystem_store_datadir = /var/lib/glance/images/

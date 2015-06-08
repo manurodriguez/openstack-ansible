@@ -1,0 +1,74 @@
+- name: Create Keystone DB
+  mysql_db: name=keystone state=present
+
+- name: Create Keystone DB user/pass
+  mysql_user: name={{ KEYSTONE_DBUSER }} password={{ KEYSTONE_DBPASS }} priv=keystone.*:ALL state=present
+
+- name: Installing Keystone and dependencies
+  action: yum pkg={{item}} state=installed
+  with_items:
+      - openstack-keystone 
+      - httpd 
+      - python-openstackclient 
+      - memcached 
+      - python-memcached
+
+- name: Memcached is enabled and running
+  service: name=memcached.service state=started enabled=yes
+
+- name: Adding the keystone settings
+  template: src=keystone.conf.j2 dest=/etc/keystone/keystone.conf
+
+- name: Create generic certificates and keys
+  shell: keystone-manage pki_setup --keystone-user keystone --keystone-group keystone
+
+- name: Restrict access to the associated files on /var
+  file: path=/var/log/keystone owner=keystone group=root recurse=yes
+
+- name: Restrict access to the associated files on /etc
+  file: path=/etc/keystone/ssl owner=keystone group=keystone mode=0750 recurse=yes
+
+- name: Initialize Keystone database
+  shell: su -s /bin/sh -c "keystone-manage db_sync" keystone
+
+- name: Start the Openstack keystone service and enable
+  service: name=openstack-keystone.service state=started enabled=yes
+
+- name: Create the service entity for the Identity service
+  command: openstack --os-url http://{{MY_PRIVATE_IP}}:35357/v2.0 --os-token {{ADMIN_TOKEN}} service create --name keystone --description "Openstack Identity" identity
+
+- name: Populate endpoints in service catalog
+  command: openstack --os-url http://{{MY_PRIVATE_IP}}:35357/v2.0 --os-token {{ADMIN_TOKEN}} endpoint create --publicurl=http://{{MY_PUBLIC_IP}}:5000/v2.0 --internalurl=http://{{MY_PRIVATE_IP}}:5000/v2.0 --adminurl=http://{{MY_PRIVATE_IP}}:35357/v2.0 --region {{REGION_NAME}} identity
+
+- name: Creating Admin Project
+  command: openstack --os-url http://{{MY_PRIVATE_IP}}:35357/v2.0 --os-token {{ADMIN_TOKEN}} project create --description "Admin Project" {{ADMIN_PROJECT}}
+
+- name: Creating Service Project
+  command: openstack --os-url http://{{MY_PRIVATE_IP}}:35357/v2.0 --os-token {{ADMIN_TOKEN}} project create --description "Service Project" {{SERVICE_PROJECT}}
+
+- name: Create Demo Project
+  command: openstack --os-url http://{{MY_PRIVATE_IP}}:35357/v2.0 --os-token {{ADMIN_TOKEN}} project create --description "Demo Project" {{DEMO_PROJECT}}
+
+- name: Create Admin user
+  command: openstack --os-url http://{{MY_PRIVATE_IP}}:35357/v2.0 --os-token {{ADMIN_TOKEN}} user create --password {{ADMIN_PASS}} {{ADMIN_USER}} 
+- name: Create Non-admin user
+  command: openstack --os-url http://{{MY_PRIVATE_IP}}:35357/v2.0 --os-token {{ADMIN_TOKEN}} user create --password {{DEMO_PASS}} {{DEMO_USER}}
+
+- name: Create Admin role
+  command: openstack --os-url http://{{MY_PRIVATE_IP}}:35357/v2.0 --os-token {{ADMIN_TOKEN}} role create {{ADMIN_ROLE_NAME}} 
+
+- name: Create Demo role
+  command: openstack --os-url http://{{MY_PRIVATE_IP}}:35357/v2.0 --os-token {{ADMIN_TOKEN}} role create {{DEMO_ROLE_NAME}}
+
+- name: Grant Admin role to admin project and user
+  command: openstack --os-url http://{{MY_PRIVATE_IP}}:35357/v2.0 --os-token {{ADMIN_TOKEN}} role add --project {{ADMIN_PROJECT}} --user {{ADMIN_USER}} {{ADMIN_ROLE_NAME}}
+
+- name: Grant User role to demo project and user
+  command: openstack --os-url http://{{MY_PRIVATE_IP}}:35357/v2.0 --os-token {{ADMIN_TOKEN}} role add --project {{DEMO_PROJECT}} --user {{DEMO_USER}} {{DEMO_ROLE_NAME}}
+
+- name: Create admin client environment scripts
+  template: src=admin-openrc.j2 dest=~/admin-openrc.sh
+
+- name: Create user client environment scripts
+  template: src=demo-openrc.j2 dest=~/demo-openrc.sh
+

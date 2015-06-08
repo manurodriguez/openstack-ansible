@@ -1,0 +1,17 @@
+[DEFAULT]
+admin_token = {{ADMIN_TOKEN}}
+
+[database]
+connection = mysql://{{KEYSTONE_DBUSER}}:{{KEYSTONE_DBPASS}}@localhost/keystone
+
+[memcache]
+servers = localhost:11211
+
+[token]
+provider = keystone.token.providers.uuid.Provider
+driver = keystone.token.persistence.backends.memcache.Token
+
+[revoke]
+driver = keystone.contrib.revoke.backends.sql.Revoke
+
+

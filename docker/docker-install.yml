@@ -15,6 +15,9 @@
     - name: Start Docker service and enable at boot time
       service: name=docker state=started enabled=yes
 
-#    - name:  Start centos instance
-#      command: docker pull centos
+    - name:  Pull personalized instance
+      command: docker pull manudocker/apache-php
+
+    - name:  Start instance with apache-php
+      command: docker run -d -p 80:80 manudocker/apache-php /usr/sbin/apache2ctl -D FOREGROUND
 

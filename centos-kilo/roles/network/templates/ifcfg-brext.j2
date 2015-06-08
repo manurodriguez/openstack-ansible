@@ -1,0 +1,16 @@
+DEVICE=br-ext
+BOOTPROTO=static
+DEVICETYPE=ovs
+TYPE=OVSBridge
+IPADDR={{['ansible_default_ipv4']['address']}}
+NETMASK={{['ansible_default_ipv4']['netmask']}}
+DEFROUTE=yes
+GATEWAY={{['ansible_default_ipv4']['gateway']}}
+IPV6INIT=yes
+IPV6_AUTOCONF=no
+IPV6ADDR={{['ansible_default_ipv6']['address']}}/{{['ansible_default_ipv6']['prefix']}}
+IPV6_DEFAULTGW={{['ansible_default_ipv6']['gateway']}}%{{['ansible_default_ipv6']['inteface']}}
+DNS1=83.138.151.81
+DNS2=83.138.151.80
+ONBOOT=yes
+NM_CONTROLLED=no

@@ -1,0 +1,124 @@
+- name: Create Keystone DB
+  mysql_db: name=keystone state=present
+
+- name: Create Keystone DB user/pass
+  mysql_user: name={{ KEYSTONE_DBUSER }} password={{ KEYSTONE_DBPASS }} priv=keystone.*:ALL state=present
+
+- name: Installing Keystone and dependencies
+  action: yum pkg={{item}} state=installed
+  with_items:
+      - openstack-keystone 
+      - httpd 
+      - mod_wsgi 
+      - python-openstackclient 
+      - memcached 
+      - python-memcached
+
+- name: Memcached is enabled and running
+  service: name=memcached.service state=started enabled=yes
+
+- name: Adding the keystone settings
+  template: src=keystone.conf.j2 dest=/etc/keystone/keystone.conf
+
+- name: Create generic certificates and keys
+  shell: keystone-manage pki_setup --keystone-user keystone --keystone-group keystone
+
+- name: Restrict access to the associated files on /var
+  file: path=/var/log/keystone owner=keystone group=root recurse=yes
+
+- name: Restrict access to the associated files on /etc
+  file: path=/etc/keystone/ssl owner=keystone group=keystone mode=0750 recurse=yes
+
+- name: Initialize Keystone database
+  shell: su -s /bin/sh -c "keystone-manage db_sync" keystone
+
+- name: Edit the httpd.conf file and add the ServerName option to reference the controller node
+  lineinfile: "dest=/etc/httpd/conf/httpd.conf regexp='^#ServerName' line='ServerName {{inventory_hostname}}:80'"
+
+- name: Creating wsgi-keystone.conf file with virtual configuration
+  copy: src=wsgi-keystone.conf dest=/etc/httpd/conf.d/wsgi-keystone.conf
+
+- name: Create keystone cgi directory
+  file: path=/var/www/cgi-bin/keystone owner=root state=directory
+
+- name: Copy the WSGI components from the upstream repository into this directory
+  shell: curl http://git.openstack.org/cgit/openstack/keystone/plain/httpd/keystone.py?h=stable/kilo | tee /var/www/cgi-bin/keystone/main /var/www/cgi-bin/keystone/admin
+
+- name: Adjusting ownership and permissions on this directory and the files in it
+  file: path=/var/www/cgi-bin/keystone owner=keystone group=keystone mode=0755 recurse=yes
+
+- name: Restore the default SELinux security context
+  command: restorecon /var/www/cgi-bin
+
+- name: Add the apache system user to the keystone system group
+  user: name=apache group=keystone
+
+- name: Restart the Apache HTTP server and enable
+  service: name=httpd.service state=started enabled=yes
+
+- name: Create the service entity for the Identity service
+  command: openstack service create --name keystone --description "Openstack Identity" identity
+  environment:
+        OS_URL: http://127.0.0.1:35357/v2.0
+        OS_TOKEN: ADMIN
+
+- name: Populate endpoints in service catalog
+  command: openstack endpoint create --publicurl=http://{{MY_PUBLIC_IP}}:5000/v2.0 --internalurl=http://{{MY_PRIVATE_IP}}:5000/v2.0 --adminurl=http://{{MY_PRIVATE_IP}}:35357/v2.0 --region RegionOne identity
+  environment:
+        OS_URL: http://127.0.0.1:35357/v2.0
+        OS_TOKEN: ADMIN
+
+- name: Creating Admin Project
+  command: openstack project create --description "Admin Project" admin
+  environment:
+        OS_URL: http://127.0.0.1:35357/v2.0
+        OS_TOKEN: ADMIN
+
+- name: Creating Service Project
+  command: openstack project create --description "Service Project" service
+  environment:
+        OS_URL: http://127.0.0.1:35357/v2.0
+        OS_TOKEN: ADMIN
+
+- name: Create Demo Project
+  command: openstack project create --description "Demo Project" demo
+  environment:
+        OS_URL: http://127.0.0.1:35357/v2.0
+        OS_TOKEN: ADMIN
+
+- name: Create Admin user
+  command: openstack user create --password {{ADMIN_PASS}} {{ADMIN_USER}} 
+  environment:
+        OS_URL: http://127.0.0.1:35357/v2.0
+        OS_TOKEN: ADMIN
+
+- name: Create Non-admin user
+  command: openstack user create --password {{DEMO_PASS}} {{DEMO_USER}}
+  environment:
+        OS_URL: http://127.0.0.1:35357/v2.0
+        OS_TOKEN: ADMIN
+
+- name: Create Admin role
+  command: openstack role create {{ADMIN_ROLE_NAME}} 
+  environment:
+        OS_URL: http://127.0.0.1:35357/v2.0
+        OS_TOKEN: ADMIN
+
+- name: Create Demo role
+  command: openstack role create {{DEMO_ROLE_NAME}}           
+  environment:
+        OS_URL: http://127.0.0.1:35357/v2.0
+        OS_TOKEN: ADMIN
+
+- name: Grant Admin role to admin project and user
+  command: openstack role add --project admin --user {{ADMIN_USER}} {{ADMIN_ROLE_NAME}}
+  environment:
+        OS_URL: http://127.0.0.1:35357/v2.0
+        OS_TOKEN: ADMIN
+
+- name: Grant User role to demo project and user
+  command: openstack role add --project demo --user {{DEMO_USER}} {{DEMO_ROLE_NAME}}
+  environment:
+        OS_URL: http://127.0.0.1:35357/v2.0
+        OS_TOKEN: ADMIN
+

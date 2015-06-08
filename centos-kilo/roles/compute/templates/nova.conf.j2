@@ -1,0 +1,49 @@
+[DEFAULT]
+rpc_backend = rabbit
+auth_strategy = keystone
+my_ip = {{MY_PUBLIC_IP}}
+vnc_enabled = True
+vncserver_listen = 0.0.0.0
+vncserver_proxyclient_address = {{MY_PUBLIC_IP}}
+novncproxy_base_url = http://{{MY_PUBLIC_IP}}:6080/vnc_auto.html
+network_api_class = nova.network.neutronv2.api.API
+security_group_api = neutron
+linuxnet_interface_driver = nova.network.linux_net.LinuxOVSInterfaceDriver
+firewall_driver = nova.virt.firewall.NoopFirewallDriver
+
+[oslo_messaging_rabbit]
+rabbit_host = {{MY_PRIVATE_IP}}
+rabbit_userid = openstack
+rabbit_password = {{RABBIT_PASS}}
+
+[database]
+connection = mysql://{{NOVA_DBUSER}}:{{NOVA_DBPASS}}@localhost/nova
+
+[keystone_authtoken]
+auth_uri = http://{{MY_PRIVATE_IP}}:5000
+auth_url = http://{{MY_PRIVATE_IP}}:35357
+auth_plugin = password
+project_domain_id = default
+user_domain_id = default
+project_name = {{SERVICE_PROJECT}}
+username = {{NOVA_USER}}
+password = {{NOVA_PASS}}
+ 
+[glance]
+host = {{MY_PRIVATE_IP}}
+
+[oslo_concurrency]
+lock_path = /var/lib/nova/tmp
+
+[libvirt]
+virt_type = qemu
+
+[neutron]
+url = http://{{MY_PRIVATE_IP}}:9696
+auth_strategy = keystone
+admin_auth_url = http://{{MY_PRIVATE_IP}}:35357/v2.0
+admin_tenant_name = {{SERVICE_PROJECT}}
+admin_username = {{NEUTRON_PASS}}
+admin_password = {{NEUTRON_PASS}}
+service_metadata_proxy = True
+metadata_proxy_shared_secret = {{METADATA_SECRET}}

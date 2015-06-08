@@ -1,0 +1,31 @@
+- name: Adding kernel networking parameters
+  sysctl: name="net.ipv4.ip_forward" value=1 sysctl_set=yes state=present
+  sysctl: name="net.ipv4.conf.all.rp_filter" value=0 sysctl_set=yes state=present
+  sysctl: name="net.ipv4.conf.default.rp_filter" value=0 sysctl_set=yes state=present reload=yes
+
+- name: Installing Neutron components
+  action: yum pkg=openstack-neutron-openvswitch state=installed
+
+- name: Adding the neutron settings
+  template: src=neutron.conf.j2 dest=/etc/neutron/neutron.conf
+
+- name: Adding the neutron ML2 plug-in settings
+  template: src=ml2_conf.ini.j2 dest=/etc/neutron/plugins/ml2/ml2_conf.ini
+
+- name: Configure the Layer-3 (L3) agent
+  template: src=l3_agent.ini.j2 dest=/etc/neutron/l3_agent.ini
+
+- name: Configure the dhcp agent
+  template: src=dhcp_agent.ini.j2 dest=/etc/neutron/dhcp_agent.ini
+
+- name: Configure the metadata agent
+  template: src=metadata_agent.ini.j2 dest=/etc/neutron/metadata_agent.ini
+
+- name: Create symlink pointing to the ML2 plug-in configuration file
+  shell: ln -s /etc/neutron/plugins/ml2/ml2_conf.ini /etc/neutron/plugin.ini
+
+- name: Populate the network service database
+  shell: su -s /bin/sh -c "neutron-db-manage --config-file /etc/neutron/neutron.conf --config-file /etc/neutron/plugins/ml2/ml2_conf.ini upgrade head" neutron
+
+- name: Start the openvswitch service and configure it to start at boot time.
+  service: name=openvswitch.service state=restarted enabled=yes
