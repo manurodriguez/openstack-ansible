@@ -1,0 +1,32 @@
+- name: Installing RabbitMQ and MariaDB
+  action: yum pkg={{item}} state=installed
+  with_items: 
+      - mariadb
+      - mariadb-server
+      - MySQL-python
+      - rabbitmq-server
+
+- name: Configuring UTF-8 character set on MariaDB
+  copy: src=mariadb_openstack.cnf dest=/etc/my.cnf.d/mariadb_openstack.cnf
+
+- name: Restart MariaDB
+  service: name=mariadb.service state=restarted enabled=yes
+
+- name: Start RabbitMQ
+  service: name=rabbitmq-server.service state=started enabled=yes
+
+- name: Setting up rabbitmq openstack credentials
+  command: rabbitmqctl add_user openstack {{ RABBIT_PASS }}
+
+- name: Change default rabbitmq openstack permissions
+  command: rabbitmqctl set_permissions openstack ".*" ".*" ".*"
+
+- name: Setup MariaDB root password
+  action: command mysqladmin -u root password {{ MYSQL_ROOTPASS }}
+
+- name: Preserve MariaDB credentials
+  template: src=my.cnf.j2 dest=/root/.my.cnf
+
+- name: Secure /root/.my.cnf file
+  file: path=/root/.my.cnf owner=root group=root mode=0600
+

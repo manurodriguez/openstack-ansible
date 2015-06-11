@@ -1,0 +1,2 @@
+- name: Network restart
+  service: name=network.service state=restarted

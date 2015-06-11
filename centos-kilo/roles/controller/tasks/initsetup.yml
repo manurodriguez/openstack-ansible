@@ -1,0 +1,17 @@
+- name: ntp is installed
+  yum: pkg=ntp state=installed
+  tags: ntp
+
+- name: ntpd is running and enabled
+  service: name=ntpd state=running enabled=yes
+  tags: ntp
+
+- name: Install the Openstack repo from a remote location
+  yum: name=http://rdo.fedorapeople.org/openstack-kilo/rdo-release-kilo.rpm state=present
+
+- name: Upgrade all packages
+  yum: name=* state=latest
+
+- name: Install the latest version of openstack-selinux
+  yum: name=openstack-selinux state=latest
+

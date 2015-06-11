@@ -1,0 +1,8 @@
+DEVICE={{EXT_INTERFACE}}
+BOOTPROTO=none
+HWADDR={{ ansible_default_ipv4.macaddress }}
+ONBOOT=yes
+NM_CONTROLLED=no
+DEVICETYPE=ovs
+TYPE=OVSPort
+OVS_BRIDGE=br-ext
