@@ -1,3 +1,4 @@
-- hosts: compute-node
+- hosts: openstack-server
   roles:
+    - common
     - compute

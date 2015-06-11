@@ -1,4 +1,4 @@
-- hosts: controller-node
+- hosts: openstack-server
   roles:
     - common
     - controller

@@ -1,10 +1,44 @@
-- name: Adding kernel networking parameters
-  sysctl: name="net.ipv4.ip_forward" value=1 sysctl_set=yes state=present
-  sysctl: name="net.ipv4.conf.all.rp_filter" value=0 sysctl_set=yes state=present
-  sysctl: name="net.ipv4.conf.default.rp_filter" value=0 sysctl_set=yes state=present reload=yes
+- name: Adding kernel networking parameters with one values
+  sysctl: name={{item}} value=1 sysctl_set=yes state=present
+  with_items:
+      - net.ipv4.ip_forward
+      - net.bridge.bridge-nf-call-iptables
+      - net.bridge.bridge-nf-call-ip6tables
+
+- name: Adding kernel networking parameters with zero values
+  sysctl: name={{item}} value=0 sysctl_set=yes state=present reload=yes
+  with_items:
+      - net.ipv4.conf.all.rp_filter
+      - net.ipv4.conf.default.rp_filter
+
+- name: Create Neutron DB
+  mysql_db: name=neutron state=present
+
+- name: Create Neutron DB user/pass
+  mysql_user: name={{NEUTRON_DBUSER}} password={{NEUTRON_DBPASS}} priv=neutron.*:ALL state=present
+
+- name: Create neutron user
+  command: openstack --os-auth-url http://{{MY_PRIVATE_IP}}:35357/v2.0 --os-tenant-name {{ADMIN_PROJECT}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} user create --password {{NEUTRON_PASS}} {{NEUTRON_USER}}
+
+- name: Add neutron user into admin role
+  command: openstack --os-auth-url http://{{MY_PRIVATE_IP}}:35357/v2.0 --os-tenant-name {{ADMIN_PROJECT}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} role add --project {{SERVICE_PROJECT}} --user {{NEUTRON_USER}} {{ADMIN_ROLE_NAME}}
+
+- name: Create the neutron service entity
+  command: openstack --os-auth-url http://{{MY_PRIVATE_IP}}:35357/v2.0 --os-tenant-name {{ADMIN_PROJECT}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} service create --name neutron --description "Openstack Networking" network
+
+- name: Create the compute service API endpoints
+  command: openstack --os-auth-url http://{{MY_PRIVATE_IP}}:35357/v2.0 --os-tenant-name {{ADMIN_PROJECT}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} endpoint create --publicurl http://{{MY_PUBLIC_IP}}:9696 --internalurl http://{{MY_PRIVATE_IP}}:9696 --adminurl http://{{MY_PRIVATE_IP}}:9696 --region {{REGION_NAME}} network
 
 - name: Installing Neutron components
-  action: yum pkg=openstack-neutron-openvswitch state=installed
+  action: yum pkg={{item}} state=installed
+  with_items:
+      - openstack-neutron
+      - openstack-neutron-ml2
+      - python-neutronclient
+      - openstack-neutron-openvswitch
+
+- name: Backup the default neutron config
+  command: rsync -avz /etc/neutron /tmp
 
 - name: Adding the neutron settings
   template: src=neutron.conf.j2 dest=/etc/neutron/neutron.conf
@@ -27,5 +61,38 @@
 - name: Populate the network service database
   shell: su -s /bin/sh -c "neutron-db-manage --config-file /etc/neutron/neutron.conf --config-file /etc/neutron/plugins/ml2/ml2_conf.ini upgrade head" neutron
 
-- name: Start the openvswitch service and configure it to start at boot time.
-  service: name=openvswitch.service state=restarted enabled=yes
+- name: Start the openvswitch service and enable at boot time
+  service: name=openvswitch.service state=started enabled=yes
+
+- name: Replace external interface to use the bridge
+  template: src=ifcfg.j2 dest=/etc/sysconfig/network-scripts/ifcfg-{{EXT_INTERFACE}}
+
+- name: Add bridge interface to use the IP from the external interface
+  template: src=ifcfg-brext.j2 dest=/etc/sysconfig/network-scripts/ifcfg-brext
+  notify: 
+       - Network restart
+
+- name: Replace the path of plugin.ini (bug issue)
+  replace: dest=/usr/lib/systemd/system/neutron-openvswitch-agent.service regexp='plugins/openvswitch/ovs_neutron_plugin.ini' replace='plugin.ini' backup=yes
+  tags: replace
+
+- name: Enable the ovs-cleanup service at boot time
+  service: name=neutron-ovs-cleanup.service enabled=yes
+
+- name: Start the Networking services and configure them to start at boot time
+  service: name={{item}} state=started enabled=yes
+  with_items:
+      - neutron-server.service
+      - neutron-openvswitch-agent.service
+      - neutron-l3-agent.service
+      - neutron-dhcp-agent.service
+      - neutron-metadata-agent.service
+  notify: 
+      - Restart compute services
+  tags: neutron-restart
+
+- name: Create a private network as a non admin user
+  command: neutron --os-auth-url http://{{MY_PRIVATE_IP}}:5000/v2.0 --os-tenant-name {{DEMO_PROJECT}} --os-username {{DEMO_USER}} --os-password {{DEMO_PASS}} net-create internal
+
+- name: Create a private subnet as a non admin user
+  command: neutron --os-auth-url http://{{MY_PRIVATE_IP}}:5000/v2.0 --os-tenant-name {{DEMO_PROJECT}} --os-username {{DEMO_USER}} --os-password {{DEMO_PASS}} subnet-create internal --name privatenet {{PRIV_SUBNET}}

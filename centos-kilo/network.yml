@@ -1,3 +1,4 @@
-- hosts: network-node
+- hosts: openstack-server
   roles:
+    - common
     - network

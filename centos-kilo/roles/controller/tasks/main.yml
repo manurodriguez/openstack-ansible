@@ -1,3 +1,4 @@
+- include: initsetup.yml
 - include: keystone.yml
 - include: glance.yml
-- include: nova.yml
+- include: rabbitmysql.yml
