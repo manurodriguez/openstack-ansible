@@ -1,0 +1,6 @@
+- hosts: openstack-server
+  roles:
+    - common
+    - controller
+    - compute
+    - network
