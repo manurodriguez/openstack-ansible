@@ -29,9 +29,6 @@
       - openstack-nova-compute
       - sysfsutils
 
-- name: Backup the default nova config
-  command: rsync -avz /etc/nova /tmp
-
 - name: Adding the nova settings
   template: src=nova.conf.j2 dest=/etc/nova/nova.conf
 

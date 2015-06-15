@@ -1,2 +1,10 @@
 - name: Network restart
-  service: name=network.service state=restarted
+  shell: ifdown br-ext ; ifdown {{EXT_INTERFACE}} ; ifup {{EXT_INTERFACE}} ; ifup br-ext
+
+- name: Restart compute services
+  service: name={{item}} state=restarted
+  with_items:
+      - openstack-nova-api.service
+      - openstack-nova-scheduler.service
+      - openstack-nova-conductor.service
+

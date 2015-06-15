@@ -1,6 +1,0 @@
-- name: Restart compute services
-  service: name={{item}} state=restarted
-  with_items:
-      - openstack-nova-api.service
-      - openstack-nova-scheduler.service
-      - openstack-nova-conductor.service

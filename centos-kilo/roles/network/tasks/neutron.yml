@@ -37,9 +37,6 @@
       - python-neutronclient
       - openstack-neutron-openvswitch
 
-- name: Backup the default neutron config
-  command: rsync -avz /etc/neutron /tmp
-
 - name: Adding the neutron settings
   template: src=neutron.conf.j2 dest=/etc/neutron/neutron.conf
 
@@ -69,12 +66,12 @@
 
 - name: Add bridge interface to use the IP from the external interface
   template: src=ifcfg-brext.j2 dest=/etc/sysconfig/network-scripts/ifcfg-brext
-  notify: 
-       - Network restart
+
+- name: Network restart
+  shell: ifdown br-ext ; ifdown {{EXT_INTERFACE}} ; ifup {{EXT_INTERFACE}} ; ifup br-ext
 
 - name: Replace the path of plugin.ini (bug issue)
   replace: dest=/usr/lib/systemd/system/neutron-openvswitch-agent.service regexp='plugins/openvswitch/ovs_neutron_plugin.ini' replace='plugin.ini' backup=yes
-  tags: replace
 
 - name: Enable the ovs-cleanup service at boot time
   service: name=neutron-ovs-cleanup.service enabled=yes
@@ -83,13 +80,12 @@
   service: name={{item}} state=started enabled=yes
   with_items:
       - neutron-server.service
-      - neutron-openvswitch-agent.service
       - neutron-l3-agent.service
       - neutron-dhcp-agent.service
       - neutron-metadata-agent.service
+      - neutron-openvswitch-agent.service
   notify: 
       - Restart compute services
-  tags: neutron-restart
 
 - name: Create a private network as a non admin user
   command: neutron --os-auth-url http://{{MY_PRIVATE_IP}}:5000/v2.0 --os-tenant-name {{DEMO_PROJECT}} --os-username {{DEMO_USER}} --os-password {{DEMO_PASS}} net-create internal
