@@ -2,3 +2,5 @@
 - include: rabbitmysql.yml
 - include: keystone.yml
 - include: glance.yml
+# comment out the line below if block storage service is not required
+- include: cinder.yml
