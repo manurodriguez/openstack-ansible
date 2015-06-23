@@ -30,3 +30,9 @@ NEUTRON_PASS: neutronpw
 METADATA_SECRET: mysecret
 PRIV_SUBNET: 192.168.1.0/24
 EXT_INTERFACE: eth0
+CINDER_DBUSER: dbcinderu
+CINDER_DBPASS: dbcinderpw
+CINDER_USER: cinder
+CINDER_PASS: cinderpw
+PVNAME: /dev/xvdb1
+VGNAME: cinder-volumes

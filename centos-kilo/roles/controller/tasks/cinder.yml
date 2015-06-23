@@ -1,0 +1,53 @@
+- name: Create Cinder DB
+  mysql_db: name=cinder state=present
+
+- name: Create Cinder DB user/pass
+  mysql_user: name={{ CINDER_DBUSER }} password={{ CINDER_DBPASS }} priv=cinder.*:ALL state=present
+
+- name: Create cinder user
+  command: openstack --os-auth-url http://{{MY_PRIVATE_IP}}:35357/v2.0 --os-tenant-name {{ADMIN_PROJECT}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} user create --password {{CINDER_PASS}} {{CINDER_USER}} 
+
+- name: Add cinder user into admin role
+  command: openstack --os-auth-url http://{{MY_PRIVATE_IP}}:35357/v2.0 --os-tenant-name {{ADMIN_PROJECT}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} role add --project {{SERVICE_PROJECT}} --user {{CINDER_USER}} {{ADMIN_ROLE_NAME}} 
+
+- name: Create the cinder service entity
+  command: openstack --os-auth-url http://{{MY_PRIVATE_IP}}:35357/v2.0  --os-tenant-name {{ADMIN_PROJECT}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} service create --name cinder --description "Openstack Block Storage" volume
+
+- name: Create the cinder service entity v2
+  command: openstack --os-auth-url http://{{MY_PRIVATE_IP}}:35357/v2.0  --os-tenant-name {{ADMIN_PROJECT}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} service create --name cinderv2 --description "Openstack Block Storage v2" volumev2
+
+- name: Create the Block Storage service API endpoints
+  command: openstack --os-auth-url http://{{MY_PRIVATE_IP}}:35357/v2.0  --os-tenant-name {{ADMIN_PROJECT}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} endpoint create --publicurl http://{{MY_PUBLIC_IP}}:8776/v2/%\(tenant_id\)s --internalurl http://{{MY_PRIVATE_IP}}:8776/v2/%\(tenant_id\)s --adminurl http://{{MY_PRIVATE_IP}}:8776/v2/%\(tenant_id\)s --region {{REGION_NAME}} volume
+
+- name: Installing Cinder and dependencies
+  action: yum pkg={{item}} state=installed
+  with_items:
+      - openstack-cinder 
+      - python-oslo-db
+      - python-cinderclient
+      - lvm2
+      - targetcli 
+      - python-oslo-log
+      - qemu
+
+- name: Adding the cinder settings
+  template: src=cinder.conf.j2 dest=/etc/cinder/cinder.conf
+
+- name: Populate the Block Storage database
+  shell: su -s /bin/sh -c "cinder-manage db_sync" cinder
+
+- name: Create the LVM physical volume
+  shell: pvcreate {{PVNAME}}
+
+- name: Create the LVM volume group
+  shell: vgcreate {{VGNAME}} {{PVNAME}}
+
+- name: Start the Block Storage services and enable them when the system boots
+  service: name={{item}} state=started enabled=yes
+  with_items:
+      - openstack-cinder-volume.service 
+      - openstack-cinder-api.service
+      - openstack-cinder-scheduler.service
+      - lvm2-lvmetad.service
+      - target.service
+

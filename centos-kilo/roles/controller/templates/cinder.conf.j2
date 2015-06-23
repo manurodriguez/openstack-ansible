@@ -1,0 +1,33 @@
+[DEFAULT]
+rpc_backend = rabbit
+auth_strategy = keystone
+my_ip = {{MY_PUBLIC_IP}}
+enabled_backends = lvm
+glance_host = {{MY_PRIVATE_IP}}
+
+[oslo_messaging_rabbit]
+rabbit_host = {{MY_PRIVATE_IP}}
+rabbit_userid = openstack
+rabbit_password = {{RABBIT_PASS}}
+
+[database]
+connection = mysql://{{CINDER_DBUSER}}:{{CINDER_DBPASS}}@localhost/cinder
+
+[keystone_authtoken]
+auth_uri = http://{{MY_PRIVATE_IP}}:5000
+auth_url = http://{{MY_PRIVATE_IP}}:35357
+auth_plugin = password
+project_domain_id = default
+user_domain_id = default
+project_name = {{SERVICE_PROJECT}}
+username = {{CINDER_USER}}
+password = {{CINDER_PASS}}
+ 
+[oslo_concurrency]
+lock_path = /var/lock/cinder
+
+[lvm]
+volume_driver = cinder.volume.drivers.lvm.LVMVolumeDriver
+volume_group = {{VGNAME}}
+iscsi_protocol = iscsi
+iscsi_helper = lioadm
