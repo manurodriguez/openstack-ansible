@@ -19,6 +19,10 @@
 - name: Create the Block Storage service API endpoints
   command: openstack --os-auth-url http://{{MY_PRIVATE_IP}}:35357/v2.0  --os-tenant-name {{ADMIN_PROJECT}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} endpoint create --publicurl http://{{MY_PUBLIC_IP}}:8776/v2/%\(tenant_id\)s --internalurl http://{{MY_PRIVATE_IP}}:8776/v2/%\(tenant_id\)s --adminurl http://{{MY_PRIVATE_IP}}:8776/v2/%\(tenant_id\)s --region {{REGION_NAME}} volume
 
+- name: Create the Block Storage service API endpoints v2
+  command: openstack --os-auth-url http://{{MY_PRIVATE_IP}}:35357/v2.0  --os-tenant-name {{ADMIN_PROJECT}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} endpoint create --publicurl http://{{MY_PUBLIC_IP}}:8776/v2/%\(tenant_id\)s --internalurl http://{{MY_PRIVATE_IP}}:8776/v2/%\(tenant_id\)s --adminurl http://{{MY_PRIVATE_IP}}:8776/v2/%\(tenant_id\)s --region {{REGION_NAME}} volumev2
+  tags: cinder
+
 - name: Installing Cinder and dependencies
   action: yum pkg={{item}} state=installed
   with_items:
@@ -34,7 +38,7 @@
   template: src=cinder.conf.j2 dest=/etc/cinder/cinder.conf
 
 - name: Populate the Block Storage database
-  shell: su -s /bin/sh -c "cinder-manage db_sync" cinder
+  shell: su -s /bin/sh -c "cinder-manage db sync" cinder
 
 - name: Create the LVM physical volume
   shell: pvcreate {{PVNAME}}
