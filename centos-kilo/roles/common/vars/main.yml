@@ -1,5 +1,5 @@
 MY_PRIVATE_IP: 127.0.0.1
-MY_PUBLIC_IP: 134.213.149.208
+MY_PUBLIC_IP: "{{ansible_default_ipv4.address}}"
 RABBIT_PASS: rabbitmqpw
 MYSQL_ROOTPASS: mysqlpw
 KEYSTONE_DBUSER: dbkeystoneu
