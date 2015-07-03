@@ -91,4 +91,4 @@
   command: neutron --os-auth-url http://{{MY_PRIVATE_IP}}:5000/v2.0 --os-tenant-name {{DEMO_PROJECT}} --os-username {{DEMO_USER}} --os-password {{DEMO_PASS}} net-create internal
 
 - name: Create a private subnet as a non admin user
-  command: neutron --os-auth-url http://{{MY_PRIVATE_IP}}:5000/v2.0 --os-tenant-name {{DEMO_PROJECT}} --os-username {{DEMO_USER}} --os-password {{DEMO_PASS}} subnet-create internal --name privatenet {{PRIV_SUBNET}}
+  command: neutron --os-auth-url http://{{MY_PRIVATE_IP}}:5000/v2.0 --os-tenant-name {{DEMO_PROJECT}} --os-username {{DEMO_USER}} --os-password {{DEMO_PASS}} subnet-create internal {{PRIV_SUBNET}} --name privatenet 

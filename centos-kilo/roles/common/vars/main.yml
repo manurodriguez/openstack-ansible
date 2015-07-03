@@ -36,3 +36,7 @@ CINDER_USER: cinder
 CINDER_PASS: cinderpw
 PVNAME: /dev/xvdb1
 VGNAME: cinder-volumes
+SAHARA_DBUSER: dbsaharau
+SAHARA_DBPASS: dbsaharapw
+SAHARA_USER: sahara
+SAHARA_PASS: saharapw
