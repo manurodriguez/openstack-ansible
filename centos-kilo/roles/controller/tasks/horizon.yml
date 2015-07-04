@@ -1,0 +1,38 @@
+- name: Installing dashboard components 
+  action: yum pkg={{item}} state=installed
+  with_items: 
+      - openstack-dashboard
+      - httpd
+      - mod_wsgi
+      - memcached
+      - python-memcached
+
+- name: Configure the dashboard to use OpenStack services on the controller node
+  lineinfile: dest=/etc/openstack-dashboard/local_settings regexp='^OPENSTACK_HOST'  line='OPENSTACK_HOST = "{{MY_PRIVATE_IP}}"'
+
+- name: Allow all hosts to access the dashboard
+  lineinfile: dest=/etc/openstack-dashboard/local_settings regexp="^ALLOWED_HOSTS"  line="ALLOWED_HOSTS = '*'"
+
+- name: Configure the memcached session storage service
+  replace: dest=/etc/openstack-dashboard/local_settings regexp='django.core.cache.backends.locmem.LocMemCache' replace='django.core.cache.backends.memcached.MemcachedCache'
+
+- name: Configure user as the default role for users that you create via the dashboard
+  lineinfile: dest=/etc/openstack-dashboard/local_settings regexp='^OPENSTACK_KEYSTONE_DEFAULT_ROLE'  line='OPENSTACK_KEYSTONE_DEFAULT_ROLE = "{{DEMO_USER}}"'
+
+- name: Configure SELinux to permit the web server to connect to OpenStack services
+  command: setsebool -P httpd_can_network_connect on
+
+- name: Making the dashboard CSS to load properly
+  file: path=/usr/share/openstack-dashboard/static owner=apache group=apache
+
+- name: Restart and enable web service
+  service: name=httpd.service state=restarted enabled=yes
+
+- name: Restart and enable session storage serivce
+  service: name=memcached.service state=restarted enabled=yes
+
+- name: Allowing dashboard traffic on port 80 on the fly
+  command: firewall-cmd --add-service=http
+
+- name: Allowing dashboard traffic on port 80 permently 
+  command: firewall-cmd --add-service=http --permanent
