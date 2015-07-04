@@ -1,0 +1,45 @@
+- name: Installing Sahara services
+  action: yum pkg={{item}} state=installed
+  with_items:
+      - openstack-sahara 
+      - python-saharaclient
+
+- name: Backup of sahara default config
+  command: rsync -avz /etc/sahara/ /tmp
+
+- name: Adding the sahara settings
+  template: src=sahara.conf.j2 dest=/etc/sahara/sahara.conf
+  tags: sahara
+
+- name: Change the max_allowed_packet option on mysql config
+  lineinfile: dest=/etc/my.cnf.d/mariadb_openstack.cnf insertafter="^\[mysqld\]" line="max_allowed_packet = 256M"
+
+- name: Restart the database service
+  service: name=mariadb.service state=restarted
+
+- name: Create Sahara DB
+  mysql_db: name=sahara state=present
+
+- name: Create Sahara DB user/pass
+  mysql_user: name={{ SAHARA_DBUSER }} password={{ SAHARA_DBPASS }} priv=sahara.*:ALL state=present
+
+- name: Create database schema
+  shell: sahara-db-manage --config-file /etc/sahara/sahara.conf upgrade head
+  tags: sahara
+
+- name: Create sahara user
+  command: openstack --os-auth-url http://{{MY_PRIVATE_IP}}:35357/v2.0 --os-tenant-name {{ADMIN_PROJECT}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} user create --password {{SAHARA_PASS}} {{SAHARA_USER}} 
+
+- name: Add sahara user into admin role
+  command: openstack --os-auth-url http://{{MY_PRIVATE_IP}}:35357/v2.0 --os-tenant-name {{ADMIN_PROJECT}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} role add --project {{SERVICE_PROJECT}} --user {{SAHARA_USER}} {{ADMIN_ROLE_NAME}} 
+
+- name: Create the sahara service entity
+  command: openstack --os-auth-url http://{{MY_PRIVATE_IP}}:35357/v2.0  --os-tenant-name {{ADMIN_PROJECT}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} service create --type data_processing  --description "Data Processing service" sahara
+
+- name: Create the Data processing service API endpoints
+  command: openstack --os-auth-url http://{{MY_PRIVATE_IP}}:35357/v2.0  --os-tenant-name {{ADMIN_PROJECT}} --os-username {{ADMIN_USER}} --os-password {{ADMIN_PASS}} endpoint create --publicurl http://{{MY_PUBLIC_IP}}:8386/v1.1/%\(tenant_id\)s --internalurl http://{{MY_PRIVATE_IP}}:8386/v1.1/%\(tenant_id\)s --adminurl http://{{MY_PRIVATE_IP}}:8386/v1.1/%\(tenant_id\)s --region {{REGION_NAME}} data_processing
+
+- name: Start the Data processing service and configure it to start when the system boots
+  service: name=openstack-sahara-all.service state=started enabled=yes
+  tags: sahara
+

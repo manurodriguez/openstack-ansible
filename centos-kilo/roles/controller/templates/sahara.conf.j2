@@ -1,0 +1,21 @@
+[DEFAULT]
+use_neutron=true
+rpc_backend = rabbit
+
+[oslo_messaging_rabbit]
+rabbit_host = 127.0.0.1
+rabbit_userid = openstack
+rabbit_password = rabbitmqpw
+
+[database]
+connection = mysql://{{SAHARA_DBUSER}}:{{SAHARA_DBPASS}}@localhost/sahara
+
+[keystone_authtoken]
+auth_uri = http://{{MY_PRIVATE_IP}}:5000
+identity_uri = http://{{MY_PRIVATE_IP}}:35357
+admin_user = {{ADMIN_USER}}
+admin_password = {{ADMIN_PASS}}
+admin_tenant_name = {{ADMIN_PROJECT}}
+
+[cinder]
+api_version = 2
